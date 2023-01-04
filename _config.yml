@@ -17,8 +17,8 @@ remote_theme: "mmistakes/so-simple-theme@3.2.0"
 # remote_theme: mmistakes/so-simple-theme
 skin: "/assets/css/skins/default.css"
 locale: en-US
-title: "My Awesome Site"
-description: "It really is the best."
+title: "Blog KC"
+description: "관심사 기록 저장소"
 baseurl: # the subpath of your site, e.g. "/blog"
 url: # the base hostname & protocol for your site e.g. "https://mmistakes.github.io"
 logo: # path of site logo, e.g. "/images/logo.png"
@@ -26,7 +26,7 @@ date_format: "%B %-d, %Y"
 read_time: # reading time estimates, e.g. true
 words_per_minute: # 200
 mathjax:
-  enable: # MathJax equations, e.g. true, false (default)
+  enable: true # MathJax equations, e.g. true, false (default)
   combo:  # "tex-svg" (default), "tex-mml-chtml", etc.: docs.mathjax.org/en/latest/web/components/combined.html
   tags:  # "none", "ams" (default), "all"
 google_fonts:
@@ -108,9 +108,11 @@ footer_links:
 
 
 # comments
-repository: "keechang-choi/keechang-choi.github.io"
 comments:
   provider: "utterances"
-  utterances:
-    theme: "photon-dark"
-    issue_term: "pathname"
+
+utterances:
+  repo: "keechang-choi/keechang-choi.github.io"
+  label: "Comments"
+  theme: "dark-blue"
+  issue-term: "pathname"
