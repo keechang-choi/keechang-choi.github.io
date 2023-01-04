@@ -88,6 +88,7 @@ defaults:
     values:
       layout: post
       share: true
+      comments: true
 
 # Site Author
 author:
@@ -111,5 +112,7 @@ footer_links:
 comments:
   provider: "utterances"
   utterances:
+    repo: "keechang-choi/keechang-choi.github.io"
     theme: "github-light" # "github-dark"
-    issue_term: "pathname"
+    issue-term: "pathname"
+    label: "Comments"
