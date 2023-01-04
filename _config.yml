@@ -110,9 +110,6 @@ footer_links:
 # comments
 comments:
   provider: "utterances"
-
-utterances:
-  repo: "keechang-choi/keechang-choi.github.io"
-  label: "Comments"
-  theme: "dark-blue"
-  issue-term: "pathname"
+  utterances:
+    theme: "github-light" # "github-dark"
+    issue_term: "pathname"
