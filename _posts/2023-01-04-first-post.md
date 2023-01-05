@@ -1,6 +1,7 @@
 ---
 title: "첫 포스팅"
 date: 2023-01-04T08:08:50-04:00
+categories: etc math
 ---
 
 [MathJax](http://www.mathjax.org/) is a simple, yet powerful, way of
