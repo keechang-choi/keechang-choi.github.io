@@ -1,43 +1,64 @@
 import igraph as ig
 import matplotlib.pyplot as plt
-n = 12
-g = ig.Graph(directed=True)
-# before adding edge
-g.add_vertices(n)
 
-label_num = [0]*n
-for i in range(n):
-    label_num[i] = i*2
 
-g.add_edges([(1,0),(2,1), (3,2), (4,3),(4,6),
-            (5,1),
-            (6,2), (7,6), (8,7),
-            (9,0),
-            (10,0), (11,10)])
+def GetVIdx(depth, left_order):
+    return acc_nPi[depth] + left_order
 
-name = ["A", "B", "A", "B", "C", "F", "C", "B", "D", "C", "D", "F"]
-label = [a+str(b) for a,b in zip(name, label_num)]
-g.vs["label"] = label
-g.vs["size"] = 0.5
-g.vs["label_size"] = 10
-fig, ax = plt.subplots()
+def GetFullGraph():
 
-# ig.plot(g, layout="kk", target=ax)
-ig.plot(g, layout=g.layout_reingold_tilford(mode="in", root=[0]), target=ax)
-plt.show()
+    g = ig.Graph(num_vertices, directed=True)
 
-if __name__ == "__main__":
-
-    max_choosable_int = 3
-    state = 0
+    max_choosable_int = n
+    state = 0 
+    one_cnt = 0
+    same_depth_cnt = 0
     q = []
-    q.append(state)
+    q.append((state, one_cnt))
     while(len(q) != 0):
-        state = q.pop(0)
-        print(state)
+        state, one_cnt = q.pop(0)
+        depth = one_cnt
+        same_depth_cnt += 1
+        if(same_depth_cnt >= nPi[depth]):
+            same_depth_cnt = 0
+        pidx = GetVIdx(depth, same_depth_cnt)
+        num_children = n - depth
         for i in range(max_choosable_int):
             nth_bit = 1<<i
             if state & nth_bit == 0:
-                q.append(state | nth_bit)
+                q.append((state | nth_bit, one_cnt+1))
+        edges_to_add = []
+        for child_cnt in range(num_children):
+            cidx = GetVIdx(depth+1, same_depth_cnt*num_children + child_cnt)
+            edges_to_add.append((cidx, pidx))
+        if(len(edges_to_add) > 0):
+            g.add_edges(edges_to_add)
 
 
+    g.vs["label"] = list(range(num_vertices))
+    g.vs["size"] = 0.5
+    g.vs["label_size"] = 10
+
+    return g
+
+if __name__ == "__main__":
+
+    n = 3
+    nPi = [1]
+    for i in range(n):
+        nPi.append(nPi[-1]*(n-i))
+
+    acc_nPi = [0]
+    for i in range(n+1):
+        acc_nPi.append(acc_nPi[-1] + nPi[i])
+
+    num_vertices = acc_nPi[n+1]
+
+    g = GetFullGraph()
+
+    
+    fig, ax = plt.subplots()
+
+    # ig.plot(g, layout="kk", target=ax)
+    ig.plot(g, layout=g.layout_reingold_tilford(mode="in", root=[0]), target=ax)
+    plt.show()
