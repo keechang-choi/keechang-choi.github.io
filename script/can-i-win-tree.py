@@ -208,7 +208,7 @@ if __name__ == "__main__":
         y2 = pos_y_map(position[edge[1]][1])
         Xe+=[x2, x1, None]
         Ye+=[y2, y1, None]
-        edge_label_pos.append([(x1*0.2+x2*0.8), (y1*0.2+y2*0.8)])
+        edge_label_pos.append([(x1*0.1+x2*0.9), (y1*0.1+y2*0.9)])
     edge_label = [str(l+1) for l in g.es["label"]]
 
 
@@ -221,7 +221,7 @@ if __name__ == "__main__":
                     hoverinfo='none',
                     marker=dict(size=20,
                                 symbol= "arrow", 
-                                angleref="previous")
+                                angleref="previous"),
                     )
                 )
     
@@ -286,9 +286,9 @@ if __name__ == "__main__":
 
     v_label = list(map(convert_state_to_string, g.vs["label"]))
     annotations = make_annotations(
-        v_annotation_pos, v_label, 20, "black", 0.1
+        v_annotation_pos, v_label, 10, "black", 0
         ) + make_annotations(
-            edge_label_pos, edge_label, 20, "gray"
+            edge_label_pos, edge_label, 10, "gray"
         )
     fig.update_layout(title=f'Game Tree for {n}, {desired_total}',
                 annotations=annotations,
@@ -300,5 +300,5 @@ if __name__ == "__main__":
                 hovermode='closest',
                 plot_bgcolor='rgb(248,248,248)'
                 )
-    fig.show()
+    # fig.show()
     fig.write_html("game-tree.html")
