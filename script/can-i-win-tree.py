@@ -169,9 +169,11 @@ if __name__ == "__main__":
     for i in range(n+1):
         acc_nPi.append(acc_nPi[-1] + nPi[i])
 
+    # full graph
     # num_vertices = acc_nPi[n+1]
     # g = GetFullGraph()
 
+    # state graph
     num_vertices = 1 << n
     g = GetStateGraph()
 
