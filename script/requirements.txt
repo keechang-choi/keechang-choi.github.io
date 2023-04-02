@@ -1,0 +1,5 @@
+# conda install -c conda-forge --yes --file requirements.txt
+tenacity
+plotly
+python-igraph
+matplotlib
