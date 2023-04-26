@@ -134,6 +134,31 @@ vulkan에서는 image를 직접 접근하는게 아니라, image view를 통해�
 
 descriptor에 관한 내용과 개념 복습 WIP
 
+uniform buffer를 다루기 위해서 descriptor set 관련 개념을 한번 다뤘었다. 이번에는 Combined Image Sampler 타입의 descriptor를 만들어서 shader로 전달을 해줘야 한다. 한가지 variation으로, 여러 객체 마다 다른 model(texture 포함)을 가지고 있어서 global descriptor set으로는 이를 처리할 수 없다는 점이다.
+
+이를 위해서 model의 member로 texture descriptor set을 두는 방법을 택했는데, 다른 선택지도 여러가지 있는 것 같다.
+
+먼저 descriptor set에 대한 recap
+- descriptor pool을 만든다 (descriptor의 타입과 pool size 를 명시)
+- descriptor set layout을 만든다
+  - 어떤 자원과 연결되는지 binding에 대한 정보
+  - 이 layout은 pipeline을 생성할때 넘겨줘야 한다.
+- layout과 descriptor pool을 사용해서, descriptor를 할당받어 set에 쓴다. 
+  - 이때 몇번 set이 어떤 자원과 연결되는지 정보가 들어간다
+  - 이 과정은 writer를 통해서 진행
+- 그 후 draw call 에 앞서서 bind descriptor set call을 통해서 자원을 변경해준다.
+  - 이 binding의 주기가 global / each object 등 다르게 해줄 수 있다는 장점이 있음
+
+주의해야할 점으로 부적절한 descriptor pool은 이후에 validation layer가 잡지 못하는 문제를 낳을 수 있다고 한다.
+vulkan에서 이 descriptor set 할당에 대한 책임을 driver로 넘긴것이라고 하는데, 안전하게 사용하길 권장하는 부분이라고 한다.
+
+object 별 texture descriptor set을 두는 방법 이외에 다른 선택지로는 하나의 큰 uniform buffer에 모든 texture 를 bind해놓고, dynamic offset을 주는 방식이 있다.
+
+최종 구현된 코드에서는 카메라 정보만 uniform buffer와 global descriptor set을 통해 사용되고, object 별 matrix는 push constants를 통해, texture image는 object 별 descriptor set을 통해 사용된다.
+
+UBO는 shader에서 읽을때와 동시에 global descriptor set에 bind된 자원(camera matrix)을 변경하게 되면 race-condition의 문제가 생길 수 있어서 frame max-in-flight수와 동일하게 준 것이라고 한다. texture는 read only 이기에 object 수 만큼만 생성했다.
+
+
 <image src="/images/vulkan-tutorial-texture.gif" alt="img" width="900" /> 
 
 # 마무리
@@ -141,7 +166,8 @@ descriptor에 관한 내용과 개념 복습 WIP
 
 혼자 공부하다보면 끝났다는 개념이 없는 것 같다. 학교나 회사에서 뭔가 프로젝트를 진행할 때는, 기한과 목적이 뚜렷하다보니 마무리가 딱 지어지는데 혼자 공부해놓고 가만히 두면 잊혀지기도 빨리 잊혀지고 한 파트를 끝냈다는 느낌이 잘 안든다.
 
-사실 이런 위화감이 드는 이유는 개인으로서 특정 소속 없이 공부해본 적이 없기 때문인 것 같기도 하다. 학교에서는 시험을 보니까, 졸업을 하기위해서, 혹은 미래에 취업을 위해서 공부를 했던 것 같다. 그때는 공부하는 것들 하나하나가 너무 자연스러운 시기여서 그런지, 특별히 자기발전에 대해서 의식한 적이 없었다. 아니면 너무 빨리 돌아가는 학기 사이클에서 그럴 여유가 없었는지도 모르겠다. 일부는 흥미가 생겨서 들은 수업들도 있지만 아무래도 그런 것들은 자기 발전이나 유용성을 기대하고 공부하지는 않아서 그런지 자연스럽게 체득하는 느낌이었던 것 같다.
-회사에서 일 하면서도 모르는 내용이나 새로 써야하는 기술들이 생기면 찾아보긴 했지만, 경험으로 쌓인다는 느낌이었고 구체적인 목적이 있는 만큼 목적이 달성되면 그 내용 자체를 내 개인을 위해서 기록해야겠다는 생각이 들지 않았던 것 같다. 
+사실 이런 위화감이 드는 이유는 개인으로서 특정 소속 없이 공부해본 적이 없기 때문인 것 같기도 하다. 학교에서는 시험을 보니까, 졸업을 하기위해서, 혹은 미래에 취업을 위해서 공부를 했던 것 같다. 그때는 공부하는 것들 하나하나가 너무 자연스러운 시기여서 그런지, 특별히 자기발전에 대해서 의식한 적이 없었다. 아니면 너무 빨리 돌아가는 학기 사이클에서 그럴 여유가 없었는지도 모르겠다. 일부는 흥미가 생겨서 들은 수업들도 있지만 아무래도 그런 것들은 자기 발전이나 유용성을 기대하고 공부하지는 않아서 그런지 자연스럽게 체득하는 느낌이었던 것 같다. 
+
+회사에서 들었던 얘기인데, 회사 다니면서 필요한 공부를 하는게, 대학원에서 연구하면서보다 더 효율적이라는 얘기가 있었다. 일 하면서도 모르는 내용이나 새로 써야하는 기술들이 생기면 찾아보긴 했지만, 경험으로 쌓인다는 느낌이었고 구체적인 목적이 있는 만큼 목적이 달성되면 그 내용 자체를 내 개인을 위해서 기록해야겠다는 생각이 들지 않았던 것 같다.
 
 그래서 이렇게라도 간략히 정리해서 올려놓으면 확실이 기억에도 도움이 되고, 마무리를 짓는 느낌도 들어서 좋은 것 같다.
