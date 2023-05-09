@@ -152,15 +152,22 @@ texture image를 생성한 후에는, copy buffer to image를 하기 전 후로 
 
 vulkan에서는 image를 직접 접근하는게 아니라, image view를 통해서 어떤 파트에 접근할건지 등을 설정한다. swap chain의 image 설정할때 이미 다룬 내용이다.
 
-다음은 sampler 인데, 이전 세대 api들과 다르게, vulkan의 smapler를 texture image과 독립적인 개체이다. 그래서 image view에 대한 참조가 없고, over sampling과 under sampling 등의 문제 해결과 texel이 이미지 밖에 있는 경우 등에 대한 설정을 해줄 수 있다.
-
-이미지를 사용하기 전에, fragment shader에서 interpolate된 texture coordinate(uv 좌표값)으로 먼저 검증을 할 수 있다.
+이미지를 사용하기 전에, fragment shader에서 interpolate된 texture coordinate(uv 좌표값)으로 먼저 uv좌표 값을 검증을 할 수 있다.
 
 |                                                                                |                                                                                |
 | :----------------------------------------------------------------------------: | :----------------------------------------------------------------------------: |
 | <image src="/images/vulkan-tutorial-texture-uv-1.png" alt="img" width="900" /> | <image src="/images/vulkan-tutorial-texture-uv-2.png" alt="img" width="900" /> |
 
-텍스쳐 이미지를 추가한 후, Sampler 의 addressing mode를 mirrored repeat로 설정하면 다음과 같은 텍스쳐가 나온다.  
+다음은 sampler 인데, 이전 세대 api들과 다르게, vulkan의 smapler를 texture image과 독립적인 개체이다. 그래서 image view에 대한 참조가 없고, over sampling과 under sampling 등의 문제 해결과 texel이 이미지 밖에 있는 경우 등에 대한 설정을 해줄 수 있다.  
+over sampling의 경우 texture image보다 더 촘촘한 uv coord 값이 주어졌을때 발생하는 문제다. 즉 화면에 보여지는 여러 pixel들이 texture 이미지의 하나의 texel로부터 얻어진 경우인데, 주로 확대해보면 그 현상이 크게 보인다. 이때 처리방식에 따라 가장 가까운 texel을 선택할 것인지, linear interpolation 된 값을 사용할 것인지를 sampler의 magnification filter에서 지정할 수 있다.
+
+|                               magnification filter - nearest                                |                               magnification filter - linear                                |
+| :-----------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------: |
+| <image src="/images/vulkan-tutorial-texture-magfilter-nearest.png" alt="img" width="900" /> | <image src="/images/vulkan-tutorial-texture-magfilter-linear.png" alt="img" width="900" /> |
+
+
+
+텍스쳐 이미지를 추가한 후, Sampler 의 addressing mode를 mirrored repeat로 설정한 후, texture coordinate이 texture image의 범위를 초과하도록 임의 값을 곱해주면 다음과 같은 텍스쳐가 나온다.  
 ![image](/images/vulkan-tutorial-texture-mirror-repeat.png)  
 
 
