@@ -42,7 +42,7 @@ image:
 ![image](/images/vulkan-tutorial-depth.png)  
 
 ## Intro
-이전에 사과 모델을 띄웠을때, 위 이미지처럼 face들이 가까운 것과 먼것에 대한 처리 없이 나왔어야 하지만, 이전 과정[(Fixed Function Pipeline Stages -Vulkan Game Engine Tutorial 04)](https://youtu.be/ecMcXW6MSYU?list=PL8327DO66nu9qYVKLDmdLW_84-yE4auCR)에서 이미 depth test에 대한 처리가 구현되어 있어 잘 나올 수 있었다.
+이전에 사과 모델을 띄웠을때, 위 이미지처럼 face들이 가까운 것과 먼것에 대한 처리 없이 나왔어야 하지만, 이전 과정[(Fixed Function Pipeline Stages -Vulkan Game Engine Tutorial 04)](https://youtu.be/ecMcXW6MSYU?list=PL8327DO66nu9qYVKLDmdLW_84-yE4auCR)에서 이미 depth test에 대한 처리가 구현되어 있어 잘 나올 수 있었다.  
 depth test란 간단히 현 시점 기준 보이는 가까운 것은 그리고 가려지는 먼 것은 그리지 않게 하기위한 테스트이다.
 
 ## 3D geometry
@@ -53,15 +53,14 @@ vulkan-tutorial.com/Depth_buffering 의 내용에서는 이전 texture 내용을
 - vertex shader
 - model vertices
   
+
 이 단계를 마치고 렌더링 했을 때, 위와 같은 앞뒤가 뒤죽박죽인 화면을 얻을 수 있다. 
 
 depth 처리를 위한 두가지 방법을 소개하는데, 
 - draw call 순서를 조정
 - depth test를 사용 (depth buffer)
   
-1번 방법은 투명한 물체 표현에 사용된다 (order independent transparency는 해결하기 힘든 문제라고 하는데, 그래서 이전의 point light 의 semi-transparent 구현에서도 alpha blending과 order dependent한 방식으로 해결했다.)
-
-[Alpha Blending and Transparency - Vulkan Game EngineTutorial 27](https://www.youtube.com/watch?v=uZqxj6tLDY4&list=PL8327DO66nu9qYVKLDmdLW_84-yE4auCR&index=31)
+1번 방법은 투명한 물체 표현에 사용된다. order independent transparency는 해결하기 힘든 문제라고 하는데, 그래서 이전의 point light 의 semi-transparent 구현에서도 alpha blending과 order dependent한 방식으로 해결했다. [Alpha Blending and Transparency - Vulkan Game EngineTutorial 27](https://www.youtube.com/watch?v=uZqxj6tLDY4&list=PL8327DO66nu9qYVKLDmdLW_84-yE4auCR&index=31)
 
 여기서는 2번 방법에 대한 구현이 진행된다. 원리는 rasterizer 단계에서 fragment를 생성할때마다, depth test를 실행해서 새로운 fragment가 이전 것 보다 가까운지 depth 값을 비교해서 가까운 것만 저장하는 방식이다.
 
@@ -71,7 +70,7 @@ depth 처리를 위한 두가지 방법을 소개하는데,
 
 ## Depth image and view
 
-depth data도 image기반이며, swap chain 생성시 명시적으로 생성을 해줘야 한다.
+depth data도 image기반이며, swap chain 생성시 명시적으로 생성을 해줘야 한다.  
 기존 image 생성 처럼 다음 세가지를 생성해야한다.
 - image
 - memory
@@ -85,7 +84,7 @@ stencil component가 있는데, stencil test에 사용된다고 한다. 아직 �
 
 render pass에서 image layout을 depth attachment로 transition해주기 때문에 명시적으로 작성할 필요 없다고 한다. 하지만 안내대로 추가해주었다. (실수로 잘못 추가하면 validation layer warning을 보게된다.)
 
-아직 render pass나 compatibility 개념에 대해 잘 모르는 부분이 많아서 관련 문서를 나중에 읽어봐야겠다.
+아직 render pass나 compatibility 개념에 대해 잘 모르는 부분이 많아서 관련 문서를 나중에 읽어봐야겠다.  
 [Vulkan® 1.1.249 - A Specification (with all registered Vulkan extensions) (khronos.org)](https://registry.khronos.org/vulkan/specs/1.1-extensions/html/chap8.html#renderpass-compatibility)
 
 만들어 놓은 depth 관련 자원들은 frame buffer 생성시 attachment를 통해 설정된다.
@@ -101,7 +100,7 @@ renderPass가 pipeline의 청사진 같은 개념이기에 실제 들어올 데�
 
 - format : depth image foramt과 동일하게
 - attachment load op : clear 사용 (clear value도 변경해줘야 함)
-- stor op : dont care로 지정해서 하드웨어 차원에서 최적화 할 수 있도록 둔다.
+- store op : dont care로 지정해서 하드웨어 차원에서 최적화 할 수 있도록 둔다.
 - init layout / final layout : transition에서 명시해준 layout 들이 여기서 지정해줬기 때문에 불필요했던 것 같은데 render pass 관련 개념을 좀 더 알게되면 보충하겠다.
 
 ### subPass ?
@@ -136,7 +135,7 @@ subpass가 하나여서 그렇다고 하는데, 지금 구현에서는 color와 
 ## Clear values
 
 현재 구현 코드에서는 `beginSwapChainRenderPass`에 구현된 내용이며, clear value로 color에 추가로 depth,stencil 초기값을 지정해준다.
-vulkan에서 가까운 depth value가 0.0f이고 먼 값이 1.0f이기에 초기값은 1.0f로 지정해주는 것에 유의.
+vulkan에서 가까운 depth value가 0.0f이고 먼 값이 1.0f이기에 초기값은 1.0f로 지정해주는 것에 유의.  
 clear value 순서도 당연하게 attachment index와 일치해야 한다. (*color : 0, depthStencil : 1)
 
 ## Depth and stencil state
@@ -170,7 +169,7 @@ tiny obj loader 사용
 
 ## Sample mesh
 
-[Sketchfab](https://sketchfab.com/) 사이트에서 모델을 찾기 좋다고 한다.
+[Sketchfab](https://sketchfab.com/) 사이트에서 모델을 찾기 좋다고 한다.  
 tutorial과 동일한 viking room 모델을 사용했다.
 
 ## Loading vertices and indices
@@ -194,12 +193,12 @@ obj에서 0은 이미지의 bottom, vulkan에서의 0은 이미지의 top.
 
 ## Vertex deduplication
 
-모델의 vertices 자체에 중복이 많다면 index buffer의 장점을 살리지 못할 수 있다.
+모델의 vertices 자체에 중복이 많다면 index buffer의 장점을 살리지 못할 수 있다.  
 이런 경우를 위해서 hash map을 활용한 중복 제거를 추가한다.
 
 이때 hash에는, position, color, normal, uv의 vector들을 combine해야 하는데, 이 문제가 간단하지 않다고 한다.
 
-이 문제가 아직 완벽한 solution이 있는게 아니라서 c++ 공식 버전에 포함되지 않은 것이라는 말도 있던데, tutorial에서는 [cppreference.com](https://en.cppreference.com/w/cpp/utility/hash)의 예시 방식을 추천하지만 우리 구현은 [https://stackoverflow.com/questions/2590677](https://stackoverflow.com/questions/2590677)(boost 구현 방식)을 참고하여 구현되어 있다. 
+이 문제가 아직 완벽한 solution이 있는게 아니라서 c++ 공식 버전에 포함되지 않은 것이라는 말도 있던데, tutorial에서는 [cppreference.com](https://en.cppreference.com/w/cpp/utility/hash)의 예시 방식을 추천하지만 우리 구현은 [https://stackoverflow.com/questions/2590677](https://stackoverflow.com/questions/2590677)(boost 구현 방식)을 참고하여 구현되어 있다.   
 애초에 boost lib의 많은 기능들이 c++ standard로 추후에 포함되곤 하니 신뢰할 순 있을 것 같다.
 
 --- 
