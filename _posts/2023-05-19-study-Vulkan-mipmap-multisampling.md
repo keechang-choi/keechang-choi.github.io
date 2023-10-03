@@ -110,10 +110,12 @@ sampler에 지정해놨던 magFilter와 minFilter중 어떤것을 사용할지�
 
 
 # MultiSampling
-(vulkan-tutorial.com의 해당 내용)[https://vulkan-tutorial.com/Multisampling]
+
+[vulkan-tutorial.com의 해당 내용](https://vulkan-tutorial.com/Multisampling)
 
 ## Intro
-이제 LOD for texture가 가능해져서 물체가 카메라에서 멀어짐에따라 더 부드러워진 이미지를 확인 가능했다. 근데 렌더링된 이미지를 확대해보면 지그재그한 edge부분이 나타나는 경우들은 별개의 문제로 남았다.
+이제 LOD for texture가 가능해져서 물체가 카메라에서 멀어짐에따라 더 부드러워진 이미지를 확인 가능했다. 근데 렌더링된 이미지를 확대해보면 지그재그한 edge부분이 나타나는 경우들은 별개의 문제로 남았다.  
+
 ![image](/images/vulkan-tutorial-msaa-1.png)
 
 이런 효과를 aliasing이라고 지칭했는데, 렌더링에 사용가능한 픽셀의 수 (screen의 해상도)가 한정되어 있기 때문에, 모든 디스플레이에서 확대해보면 나타날 수 밖에 없다.
