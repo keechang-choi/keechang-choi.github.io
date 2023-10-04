@@ -23,8 +23,25 @@ Vulkan Game Engine 영상에서 tutorial로 중간에 넘어오게 되면서, sy
     - [command buffer 녹화](#command-buffer-녹화)
     - [command buffer 제출](#command-buffer-제출)
     - [subpass dependency](#subpass-dependency)
+    - [presentation](#presentation)
+    - [Q. subpass dependency vs. semaphore](#q-subpass-dependency-vs-semaphore)
   - [CG at TU wien ep7](#cg-at-tu-wien-ep7)
+    - [recap](#recap)
+      - [commands](#commands)
+      - [pipeline stages](#pipeline-stages)
+      - [recording](#recording)
+    - [wait idle operation](#wait-idle-operation)
+    - [fences](#fences)
+    - [semaphores](#semaphores)
+    - [pipeline barriers](#pipeline-barriers)
+    - [memory availability and visibility](#memory-availability-and-visibility)
+    - [renderPass subpass dependencies](#renderpass-subpass-dependencies)
+    - [events](#events)
   - [fix](#fix)
+    - [frames in flight](#frames-in-flight)
+    - [frame buffer and swapchain image](#frame-buffer-and-swapchain-image)
+    - [single depth buffer](#single-depth-buffer)
+    - [additional fence](#additional-fence)
 - [RenderPass](#renderpass)
 - [마무리](#마무리)
 
@@ -126,26 +143,61 @@ renderPass에 있는 subpass에서는 이미지의 layout transition을 명시�
   - 직전 subpass의 color output stage와 현재 subpass의 color output stage 사이에서 any -> color write 로의 layout transition이 이뤄지도록 지정해줌.
   - 사실 이 부분 관련해서 여러 설명을 검색해봤는데, 잘 이해가 안됐다. 아래의 영상 관련 내용 정리에서 추가할텐데, spec 문서의 first, second synchronization scope를 그대로 이해하는게 가장 정확한 설명인 것 같아 정리해놓으려 한다.
 
+### presentation
 
+graphics queue submit이 끝난 후, `renderFinishedSemaphore` 를 wait로 주어서 `vkQueuePresentKHR()` 를 호출한다.  
+graphics queue submit에서 signal sema로 지정해놓았기 때문에, rendering이 끝날때까지 기다렸다가 presentation engine으로 요청을 하게 한다.
+
+---
+### Q. subpass dependency vs. semaphore
 > Q. subpass dependency와 semaphore의 설정이 각각 필요한 이유가 뭔지? 서로 중복되는 내용은 아닌지?  
 > https://stackoverflow.com/questions/59693320/use-of-vksubpassdependency-vs-semaphore
-> A. semaphore에서 지정해주는 pWaitDstStageMask는 같이 제출한 command 실행하기 전까지 기다릴 어떤 pipeline stage를 명시하는 것이고, `vkAcquireNextImageKHR()` 에서 주는 image index는 queue 연산이 아니기 때문에 presentation engine에서 그 이미지의 사용이 끝났는지 알수가 없기 때문에 필요했던 것임.  
-> 반대로 subpass dependency는 layout transition이 언제 일어날지에 대한걸 지정해주기 때문에 필요함. 지정하지 않으면 아무때나 알아서 일어날텐데, presentation engine에서 아직 이미지를 읽고 있을 동시에 layout을 바꾸버리는 상황이 발생 가능함. (지정하지 않은 `srcStageMask`는 `VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT`가 default.)  
-> 이걸 막기위해, `pWaitDstStageMask`를 top of pipe (all commands) 로 주면, vertex processing등도 하지 않고 모든 것을 기다린 다음 시작하니까 layout 변경이 없어도 되긴함. 근데 optimal 하지 않을 수 있다는 얘기.
-> 그래서 우리가 하려는 방식은 layout transition의 srcStageMask를 `VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT`로 지정해서 이 이후에 write로 변경을 하는 방식. 이전?? sema wait가 끝난 시점이므로, presentation engine이 그 이미지 사용을 끝냈고, image layout을 변경해도 괜찮게 됨. WIP
+> 
+> A. semaphore에서 지정해주는 `pWaitDstStageMask`는 같이 제출한 command 실행하기 전까지 기다릴 어떤 pipeline stage를 명시하는 것이고, `vkAcquireNextImageKHR()` 에서 주는 image index는 queue 연산이 아니기 때문에 presentation engine에서 그 이미지의 사용이 끝났는지 알수가 없기 때문에 필요했던 것임.  
+> 
+> 반대로 subpass dependency는 layout transition이 언제 일어날지에 대한걸 지정해주기 때문에 필요함. 지정하지 않으면 아무때나 알아서 일어날텐데, presentation engine에서 아직 이미지를 읽고 있는데 layout을 바꾸버리는 상황이 발생 가능함. (지정하지 않은 `srcStageMask`는 `VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT`가 default.)  
+> 
+> 이걸 막기위해, `pWaitDstStageMask`를 top of pipe (all commands) 로 주면, vertex processing등도 하지 않고 모든 것을 기다린 다음 시작하니까 layout 변경이 없어도 되긴함. 근데 optimal 하지 않을 수 있음.
+> 
+> 그래서 우리가 하려는 방식은 layout transition의 `srcStageMask`를 `VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT`로 지정해서 이 이후에 write로 변경을 하는 방식. 이전 render pass의 commands들이 이 color att output stage에 도달한 이후에 layout transition이 일어나도록 강제하는 것인데, 이 시점은 sema wait가 끝난 시점이므로, presentation engine이 그 이미지 사용을 끝냈고, image layout을 변경해도 괜찮게 됨. 
+> 여기서 헷갈렸던 부분은, swap chain 이미지가 여러개 있는 상황에서는 이전 render pass에서 presentation engine이 image를 사용하고 있더라도 이번 render pass에서는 layout transition을 해도 문제가 없지 않냐는 의문이었는데, 이 swap chain 이미지의 수와는 독립적으로 (최악의 경우 1개인 상황에서도) 실행에 문제가 없도록 보장하기 위한 내용이라고 이해하고 넘어갔다.
 
+
+
+이 시점에서 헷갈렸던 것이, 어떤 개념이 (commands, pipeline, render pass, subpass)이 실행 (execution)과 관련이 이떻게 있는지에 대한 큰 그림이었다. 
+
+https://stackoverflow.com/questions/65047176/vulkan-is-the-rendering-pipeline-executed-once-per-subpass
+
+해당 내용을 찾아보다가 언급된 아래의 CG at TU wien Series영상을 보고 이런 큰 흐름을 이해하는데 도움이 되었다.
 ## CG at TU wien ep7
 
+https://www.youtube.com/playlist?list=PLmIqTlJ6KsE1Jx5HV4sd2jOe3V1KMHHgn
 
+이 series 내용들을 통해 명확히 이해하지 않고 넘어갔던 개념들을 한 번 크게 볼 수 있었다. animation과 적절한 이미지가 곳곳에 등장해서 글로 정리할수 있는 부분은 많지 않은 것 같다. 마지막 내용인 synch 관련 내용만 정리해놓으려 한다.
 
-https://www.youtube.com/watch?v=GiKbGWI4M-Y&list=PLmIqTlJ6KsE1Jx5HV4sd2jOe3V1KMHHgn&index=7
-
-
+### recap
+#### commands
+#### pipeline stages
+#### recording
+### wait idle operation
+### fences
+### semaphores
+### pipeline barriers
+### memory availability and visibility
+### renderPass subpass dependencies
+### events
 ## fix
+기존 LVE 코드 구조와 vulkan-tutorial.com 에서의 코드 구조 차이가 있는 부분들이 있어서 여기서 수정하고 넘어갔다. 아마 기본 구조는 같은데, vulkan-tutorial.com의 repo history를 보니, 여러 PR들이 합쳐지면서 수정된 내용이 LVE 코드에 대응되는 비슷한 부분과 차이가 벌어졌던 것으로 보인다.
 
+### frames in flight
+
+### frame buffer and swapchain image
+
+### single depth buffer
+
+### additional fence
 
 # RenderPass
 
 # 마무리
 
-https://www.youtube.com/playlist?list=PLmIqTlJ6KsE1Jx5HV4sd2jOe3V1KMHHgn
