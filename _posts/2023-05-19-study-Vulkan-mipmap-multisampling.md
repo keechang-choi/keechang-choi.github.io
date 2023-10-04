@@ -120,7 +120,7 @@ sampler에 지정해놨던 magFilter와 minFilter중 어떤것을 사용할지�
 
 이런 효과를 aliasing이라고 지칭했는데, 렌더링에 사용가능한 픽셀의 수 (screen의 해상도)가 한정되어 있기 때문에, 모든 디스플레이에서 확대해보면 나타날 수 밖에 없다.
 - oversampling이 texture 의 detail이 부족해서 나타나는 현상이라면 undersampling은 screen의 detail이 부족해서 나타나는 현상이라고 정리했다.   
-이 geometry의 edge에서 발생하는 aliasing은 screen의 pixel 한계 때문에 발생하는 undersampling이라고 볼 수 있다. (물체에 가까이 갔을때 texture 해상도가 낮아서 깨져보이는 oversampling과는 구분된다.) screen 해상도가 높았다면 이런 계단 현상을 줄일 수 있었을 것이지만, 우리는 다른 해결법으로 MSAA(Multi Sampling Anti Aliasing)을 여기서 다룬다.
+이 geometry의 edge에서 발생하는 aliasing은 screen의 pixel 한계 때문에 발생하는 undersampling이라고 볼 수 있다. (물체에 가까이 갔을때 texture 해상도가 낮아서 깨져보이는 oversampling과는 구분된다고 이해함.) screen 해상도가 높았다면 이런 계단 현상을 줄일 수 있었을 것이지만, 우리는 다른 해결법으로 MSAA(Multi Sampling Anti Aliasing)을 여기서 다룬다.
 - 이 기법을 직관적으로 보여주는 이미지가 tutorial에 제공되어 있다.
 - 일반적인 렌더링에서 픽셀의 색은 single sample point로부터 결정되는데, 대부분의 경우 그 점은 center of the target pixel on screen이다. 특정 선이 한 픽섹은 통과하면서 그 sample point를 포함하지 않으면 blank로 처리되면서 계단 효과가 발생한다.
   ![image](https://vulkan-tutorial.com/images/aliasing.png) *[https://vulkan-tutorial.com/images/aliasing.png](https://vulkan-tutorial.com/images/aliasing.png)*
