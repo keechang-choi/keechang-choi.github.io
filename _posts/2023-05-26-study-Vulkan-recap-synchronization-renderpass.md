@@ -53,7 +53,7 @@ Vulkan Game Engine 영상에서 tutorial로 중간에 넘어오게 되면서, sy
 
 
 ## tutorial rendering and presentation
-https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Rendering_and_presentation
+[https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Rendering_and_presentation](https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Rendering_and_presentation)
 
 먼저 tutorial의 위 챕터 내용을 정리해봤다.
 ### outline of a frame
@@ -113,7 +113,7 @@ swapchain 관련 연산들은 GPU에서 일어나기때문에 semaphore를 쓰�
 
 ### command buffer 녹화
 `vkResetCommandBuffer()` 관련해서 차이점이 있는데, 이는 tutorial 구현과 다르게, command pool 생성시 `VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT` 사용 여부와 관련이 있다.  
-https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkCommandPoolCreateFlagBits.html
+[https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkCommandPoolCreateFlagBits.html](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkCommandPoolCreateFlagBits.html)
 
 ### command buffer 제출
 submitInfo 관련
@@ -148,10 +148,9 @@ renderPass에 있는 subpass에서는 이미지의 layout transition을 명시�
 graphics queue submit이 끝난 후, `renderFinishedSemaphore` 를 wait로 주어서 `vkQueuePresentKHR()` 를 호출한다.  
 graphics queue submit에서 signal sema로 지정해놓았기 때문에, rendering이 끝날때까지 기다렸다가 presentation engine으로 요청을 하게 한다.
 
----
 ### Q. subpass dependency vs. semaphore
 > Q. subpass dependency와 semaphore의 설정이 각각 필요한 이유가 뭔지? 서로 중복되는 내용은 아닌지?  
-> https://stackoverflow.com/questions/59693320/use-of-vksubpassdependency-vs-semaphore
+> [https://stackoverflow.com/questions/59693320/use-of-vksubpassdependency-vs-semaphore](https://stackoverflow.com/questions/59693320/use-of-vksubpassdependency-vs-semaphore)
 > 
 > A. semaphore에서 지정해주는 `pWaitDstStageMask`는 같이 제출한 command 실행하기 전까지 기다릴 어떤 pipeline stage를 명시하는 것이고, `vkAcquireNextImageKHR()` 에서 주는 image index는 queue 연산이 아니기 때문에 presentation engine에서 그 이미지의 사용이 끝났는지 알수가 없기 때문에 필요했던 것임.  
 > 
@@ -166,26 +165,150 @@ graphics queue submit에서 signal sema로 지정해놓았기 때문에, renderi
 
 이 시점에서 헷갈렸던 것이, 어떤 개념이 (commands, pipeline, render pass, subpass)이 실행 (execution)과 관련이 이떻게 있는지에 대한 큰 그림이었다. 
 
-https://stackoverflow.com/questions/65047176/vulkan-is-the-rendering-pipeline-executed-once-per-subpass
+[https://stackoverflow.com/questions/65047176/vulkan-is-the-rendering-pipeline-executed-once-per-subpass](https://stackoverflow.com/questions/65047176/vulkan-is-the-rendering-pipeline-executed-once-per-subpass)
 
 해당 내용을 찾아보다가 언급된 아래의 CG at TU wien Series영상을 보고 이런 큰 흐름을 이해하는데 도움이 되었다.
+
+
+---
 ## CG at TU wien ep7
 
-https://www.youtube.com/playlist?list=PLmIqTlJ6KsE1Jx5HV4sd2jOe3V1KMHHgn
+[https://www.youtube.com/playlist?list=PLmIqTlJ6KsE1Jx5HV4sd2jOe3V1KMHHgn](https://www.youtube.com/playlist?list=PLmIqTlJ6KsE1Jx5HV4sd2jOe3V1KMHHgn)
 
 이 series 내용들을 통해 명확히 이해하지 않고 넘어갔던 개념들을 한 번 크게 볼 수 있었다. animation과 적절한 이미지가 곳곳에 등장해서 글로 정리할수 있는 부분은 많지 않은 것 같다. 마지막 내용인 synch 관련 내용만 정리해놓으려 한다.
 
 ### recap
 #### commands
+- state type
+  - bind, set, pushConstants 등
+- action type
+  - device에 특정 작업을 실행하는 명령들
+  - draw, transfer, dispatch, ray-tracing 관련
+- synchronization type
+  - 실행이나 리소스 접근의 synchronization
+  - pipeline barrier, waitEvent, begin renderPass 등
+  - 예를 들어 fragment shader stage에서 draw call이 실행되기 전에, copy commands가 먼저 완료되도록 기다리는 것 등
+
+
 #### pipeline stages
+- graphics
+  - draw processing
+  - vertex processing
+  - tesselation
+  - primitive processing
+  - rasterization
+  - fragment processing
+  - pixel processing
+  - api나 용어 차이가 조금 있을 수 있겠지만 큰 개념들은 graphics 전반에 적용됨.
+    - 처음에 LVE에서 다룰땐 다음처럼 핵심만 간단히 다뤘었음.
+    - inpute assembles => vertex shader => rasterization =>fragment shader => color blending
+  - programmable한 vertex/fragment shader stage에 shader language로 compile된 코드를 업로드해서 GPU에서 실행.
+- compute 
+  - draw processing
+  - compute shader 
+- ray tracing
+  - 위 두개와 다르게 분기와 cycle이 있는 directed graph형태의 stage
+  - acceleration structure traversal만 fixed function step이고 나머지는 configurable 하다고 함
+  
 #### recording
+command buffer에 여러 vkCmd가 recording 되고 (descriptor set binding 등도 포함)
+- 이 command buffer들을 여러개로 한번에 묶어서 submitInfo에 담아 queue에 제출.
+- single Time Command 등을 따로 구현해서 하나만 제출하고 바로 그 실행이 끝나기를 wait 하기도 함.
+- 하나의 command buffer에 여러 bind, draw, 등의 command를 호출해서 한번에 제출하는 형태의 구현을 써왔음
+- 여러개의 command buffer를 한번에 제출도 가능한데 그걸 batch라는 개념으로 쓰는 것 같음.
+- 영상에서는 recording 된 cmd들 사이의 순서를 강제하기 위한 신호등의 개념으로 synch를 설명한다.
+  
+synchromization primitives의 간단한 설명들.  
+
+
+pipeline barrier
+- command buffer와 같이 recording 된다. `vkCmdPipelineBarrier()`
+- command 들의 내부 순서 뿐 아니라, 같은 queue에 이전에 제출된 command와  이후에 제출된 command 사이의 순서에도 사용된다. 그래서 command buffer의 경계가 pipeline barrier 입장에서는 중요치 않다.
+- 제출 순서 submission order가 중요한 개념이고, 반대로 semaphore 나 fence 에서는 이 command buffer boundary가 중요하다.
+
+fence와 semaphore
+- signaled state가 될때까지 wait하는 목적으로 사용됨
+- semaphore는 device(GPU)에서 wait과정이 일어나지만
+- fence의 wait는 host(CPU)에서 일어남
 ### wait idle operation
+queue나 device의 작업이 끝나서 idle 상태가 될때까지 기다리는 연산.  
+- `vkQueueWaitIdle`
+- `vkDeviceWaitIdle`
+
+host side에서 device의 작업이 끝나고 idle 되기를 기다림.
+
 ### fences
+먼저 sychronization scope 개념이 필요하다. 아직 이 문서를 세세히 읽어보지 않았는데, 가장 정확하게 개념을 이해할 수 있는 방식인 것 같다. 추후 필요한 내용을 추가해서 정리해야겠다.
+[https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#synchronization-dependencies-scopes](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#synchronization-dependencies-scopes)  
+
+`synchronization scopes` 개념.
+- 동기화 명령이 실행 의존을 만들수 있는 다른 명령들의 범위
+- first scope와 second scope가 있다.
+- 실행 의존. execution dependency는 두 set of operations *(first, second scope)에서 first scope must happen-before the second scope의 실행 순서를 강제하는 개념.
+
+[https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#synchronization-fences-signaling](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#synchronization-fences-signaling)  
+
+fence 에서의 first, second scope.
+- fence에서는 first scope에 해당하는 명령들이, 같이 제출한 batch에 포함된 명령들과 그 이전에 제출된 모든 명령을 포함하고, second scope에는 fence signal operation만 포함한다.
+- fence와 함께 제출된 command 들의 실행이 완료되면 fence가 signaled 된다고 이해하면 된다.
+
+
 ### semaphores
+queue 간의 synch를 맞추기 위한 것이라 보면 됨.
+- binary semaphore
+  - 원래 이 타입 밖에 없었어서, 이것만 지원하는 연산들이 있다고 함.
+  - device-device 간의 signal만 가능
+  - swap cahin 다룰때 쓰이는 예시가 대표적
+    - presentation queue - graphics - queue
+  - swapchain 예시에서 presentation engine은 abstraction을 통해 어떤 device (gpu1 or gpu2)가 실제도 acquire image와 present에서 사용되는지 구분하지 않는다고 함.
+  - [synchronization2](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_synchronization2.html) 의 기능들을 쓰면 더 효율적이라고 함.
+- timeline semaphore
+  - 상대적으로 새로 추가된 기능
+  - integer payload가 있어서, 증가시키는 형태로 사용됨. (이 값이 1일 필요는 없어서, actual milliseconds past등의 의미있는 값을 쓸 수 있다고 함.)
+  - host-device간의 소통이 가능해진게 특징.
+  - compute 관련 예씨
+    - physics queue와 graphics queue간의 synch 문제
+    - physics에서 dispatch command로 physics simulation 계산을 한다고 하자.
+    - physic frame과 graphics frame 수가 같으면 문제가 없다.
+    - 근데 physics frame은 60hz고, graphics는 가능한 많이 같이 다른 경우라고 가정해보자.
+    - draw call이 더 적은 경우, draw call이 더 많은 경우를 나눠서 발생가능한 문제들을 설명해줌(영상 참고)
+    - 이런 상황에 timeline semaphore로 편하게 원하는 기능을 구현할 수 있다고 함.
 ### pipeline barriers
+within a queue에관한 synchronization  
+queue에 제출한 command 들이 시작하는 순서는 지켜지지만, 끝나는 순서는 out of order이므로 이 순서를 control 하기 위한 기능이다.  
+- execution
+  - 각 command가 pipeline stage를 거쳐서 실행되는데, execution barrier를 지정해주면 더 효율적인 최적화가 가능하다. stage를 지정해주지 않으면 all commands에 대해서 동작한다.
+  - 영상에서 예시 상황을 묘사해줌
+- memory
+  - access scope 개념이 추가된다.
+  - 자원을 read할때 process 시작전에 cache에 들어있는지 확인을 하고, 비슷하게 written back to the resource도 다른 연산 시작전에 확인한다.
+
+
 ### memory availability and visibility
+- available
+  - gpu의 L2 cache로 load된 상태
+- visible
+  - L1 cache 로 load된 상태
+  - pipeline stage와 access mask가 합쳐진 개념이라고 함.
+
+TODO
+이부분 예시 영상 다시 보고 설명 추가.
+
 ### renderPass subpass dependencies
+image memory barrier와 크게 다를게 없다고 함.  
+
+render pass는 frame buffer의 attachments들이 어떻게 쓰일지를 describe.  
+그리고 여러 subpass들 사이의 synchronization을 describe.  
+
+subpass dependecies는 해당 render pass 내부의 subpass 들 간의 internal과, 전/후 render pass와의 external synchronization이 가능.  
+
 ### events
+- split barrier
+- set event 이전의 commands들이 wait event 이후의 commands들과 synchronized 되는 것.
+- 그 사이의 commands 들은 영향을 받지 않는다고 함.
+- host communition이 가능하다는 특징
+- 아직 사용할 일이 없어서 자세히 보지 않았음.
+---
 ## fix
 기존 LVE 코드 구조와 vulkan-tutorial.com 에서의 코드 구조 차이가 있는 부분들이 있어서 여기서 수정하고 넘어갔다. 아마 기본 구조는 같은데, vulkan-tutorial.com의 repo history를 보니, 여러 PR들이 합쳐지면서 수정된 내용이 LVE 코드에 대응되는 비슷한 부분과 차이가 벌어졌던 것으로 보인다.
 
@@ -197,7 +320,9 @@ https://www.youtube.com/playlist?list=PLmIqTlJ6KsE1Jx5HV4sd2jOe3V1KMHHgn
 
 ### additional fence
 
+--- 
 # RenderPass
 
+---
 # 마무리
 
