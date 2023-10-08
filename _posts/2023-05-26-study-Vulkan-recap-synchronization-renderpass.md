@@ -318,7 +318,7 @@ write operation의 state라고 볼 수 있다.
 
 
 ### renderPass subpass dependencies
-image memory barrier와 크게 다를게 없다고 함.  
+image memory barrier와 크게 다를게 없다고 함. 대상이 특정 image memory가 아니고 attachment임.  
 
 render pass는 frame buffer의 attachments들이 어떻게 쓰일지를 describe.  
 그리고 여러 subpass들 사이의 synchronization을 describe.  
