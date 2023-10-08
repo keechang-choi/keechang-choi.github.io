@@ -187,6 +187,12 @@ RAII 관련 기능들을 사용했는데, (원본과 비교했을 때, 메모리
   - ui overlay update
   - `render()` 함수 호출
     - pure virtual로 선언된 이함수는 하위 class인 example에서 각각 구현된다.
+    - 각 예제에서 들어가는 기본적인 내용은 다음과 같다.
+      - UBO 업데이트
+      - `draw()` 호출
+      - draw에는 synchronization primitive 사용과, `prepareFrame()`, `buildCommandBuffers()`, command buffer submit, `submitFrame()` 호출 등이 들어가게 된다.
+  - `prepareFrame()`, `submitFrame()`은 공통된 내용으로 base에서 구현했는데,
+    - swapchain image 얻어오기와, present queue 제출 등의 내용과 `windowResize()` 및 그에따른 swapchain recreate 의 내용이 들어간다.
   - FPS 측정 및 update에 사용될 timer count
 - render loop 종료시 device wait idle 호출
 
@@ -194,7 +200,7 @@ RAII 관련 기능들을 사용했는데, (원본과 비교했을 때, 메모리
 
 기존의 example repo 원본에서도, triangle 예시는 제일 처음으로 나온다. 차이점은, 원본에서는 첫 예제인 만큼 구현된 wrapper 들을 쓰지 않고 모든 코드를 triangle 예제에 설명과 함께 넣어놨지만, 나는 이미 구현해본 내용인 만큼 최대한 구현된 wrapper들을 활용하는 방식으로 작성했다.  
 또 원본의 모든 예제에 해당되는 내용인데, single buffering만을 사용한 구현이 되어있어서 한번 queue에 제출한 내용은 모두 wait idle을 통해 기다리는 간단한 구조이다. 나는 double buffering 지원을 계속 할 수 있는 방식으로 구현하려고 하고, 이와 관련한 synchronization primitives 사용등의 부분에서 조금 변경을 했다. 
-- 기본적으로 이 [issue](https://github.com/SaschaWillems/Vulkan/issues/871)에서 밝혀져는 것과 같이 이 원본 example repo는 기능 구현에 초점을 맞춰서 성능이나 synchronization 관련 최적화는 이뤄져있지 않다.
+- 기본적으로 이 [issue](https://github.com/SaschaWillems/Vulkan/issues/871)에서 밝힌 것과 같이 이 원본 example repo는 기능 구현에 초점을 맞춰서 성능이나 synchronization 관련 최적화는 이뤄져있지 않다.
 - 대부분 확인한 예제들에서 한 frame이 끝날때마다(command를 제출한 직 후) 바로 waitIdle을 통해서 queue에 제출된 command 들이 모두 실행을 완료할 때 까지 기다린다. 따라서 race condition이 발생할 경우를 줄인 간단한 구현들이 가능하다.
 - 그래서 이전 tutorial에서와 마찬가지로, swapchain 이미지 수와 `MAX_FRAMES_IN_FLIGHT`(`MAX_CONCURRENT_FRAMES`) 값을 분리된 것으로 설정하고, 관련된 자원들도 `MAX_FRAMES_IN_FLIGHT` 값에 따라 복수개로 생성했다.
 
