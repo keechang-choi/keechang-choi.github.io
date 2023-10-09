@@ -13,7 +13,7 @@ image:
 이번 예제는 pipelines 예제이다. 하나의 모델을 파일로부터 로드한 후, lighting rendering, toon rendering, wireframe rendering의 세가지를 위한 각각의 pipeline을 생성해서 화면을 분할하여 보여주는 예제이다.  
 사실 pipeline 생성하는 작업에 대한 내용은 많지 않고, model loading을 위한 작업이 대부분을 차지했다.
 
-[https://github.com/keechang-choi/Vulkan-Graphics-Example/pull/2](https://github.com/keechang-choi/Vulkan-Graphics-Example/pull/2)
+> [https://github.com/keechang-choi/Vulkan-Graphics-Example/pull/2](https://github.com/keechang-choi/Vulkan-Graphics-Example/pull/2)
 
 
 - [glTF](#gltf)
@@ -42,33 +42,34 @@ image:
 
 [https://www.khronos.org/files/gltf20-reference-guide.pdf](https://www.khronos.org/files/gltf20-reference-guide.pdf)
 
-해당 내용들은 [vgeu_gltf.cpp](https://github.com/keechang-choi/Vulkan-Graphics-Example/blob/main/src/base/vgeu_gltf.cpp)에 구현했다. 원본의 pipelines 예제에서는 분리하지 않고 직접 필요한 glTF 기능들만 구현되어 있고, 이와 대부분 중복되짐나 조금 더 확장된 기능을 glTF 예제에서 다룬다. 두 예제를 합친 내용을 여기서 한번에 구현했다고 봐도 된다.  
+해당 내용들은 [vgeu_gltf.cpp](https://github.com/keechang-choi/Vulkan-Graphics-Example/blob/main/src/base/vgeu_gltf.cpp)에 구현했다. 원본의 pipelines 예제에서는 glTF 기능들을 분리하지 않고 필요한 내용들울 포함하는데, glTF 예제에는 조금 더 확장된 기능을 분리된 코드로 정리해 나가면서 다룬다. 두 예제를 합친 내용을 여기서 한번에 구현했다고 봐도 된다.  
 
 ## model
 - 외부에서 사용할 가장 큰 클래스다.
   - load와 draw method를 외부에서 호출하는 구조다.
 - node들을 전부 소유
-- texture도 전부 소요
+- texture도 전부 소유
 - material도 전부 소유
 - animation등 필요한 모든 resource를 소유.
 - 하위 구조들에서도 서로 참조하거나 소유하는 구현이 많이 등장하는데, 다음 기준으로 구현했다.
-  - 우선 기본 생성주기를 같이하는 member variable로 포함한다.
-  - 소유하지만 lazy loading이 필요한 member unique_ptr을 사용한다.
+  - 우선적으로 기본 생성주기를 같이하는 member variable 형태가 가능하면 사용한다.
+  - 소유하지만 lazy loading이 필요한 member는 unique_ptr을 사용한다.
   - 소유하지 않지만 null이 불가능한 경우는 reference로 참조한다.
   - 소유하지 않지만 null이 가능해야 하는 경우는 raw ptr로 참조한다.
   
 ## scene
 - 여러 node를 가리킨다.
 - node들은 Tree 구조로 구성된다.
-- glTF format에는 있지만, node를 load할 때만 사용하고, 따로 저장하고 있지는 않다.
+- node를 load할 때 시작점으로서 사용된다.
 
 ## node
 - mesh를 소유
 - skin은 소유하지 않고 참조한다.
+  - 아직 쓰이지 않음.
 - 다른 node들을 children으로 소유해서 tree형태로 참조하는 구조를 가진다.
   - root node가 모든 node를 소유하게 되는데 이 root node는 실재하지 않고 model에서 parent가 없는 node 모두를 소유한다.
   - 이렇게 구성한 이유는, 상위 node가 destruct 될때, 하위 children도 모두 destruct 되는 구조를 위해서다. cycle이 있거나 DAG 구조이면 구현이 좀 복잡해질텐데, 다행히 tree여서 간단히 구현했다.
-  - transform matrix정보를 가지고 있다. 이 transform은 parent를 기준으로 가져서 sceneGraph를 구성한다.
+- transform matrix정보를 가지고 있다. 이 transform은 parent를 기준으로 가져서 sceneGraph를 구성한다.
 - node 구조는 mesh들 간의 관계나 skinning 등에 사용가능한 계층구조를 위한 abstraction으로 보면 될 것 같다.
   
 ## mesh
@@ -93,7 +94,7 @@ image:
 - 여러 texture를 참조한다. color/normal/metalic/occlusion/emissive...
   - texture의 소유도 역시 model에 있다.
 - 하나의 descriptorSet을 가진다. 
-  - 여러 texture의 image가 binding으로 들어간다.  
+  - 여러 texture의 image들은 set의 각 binding으로 들어간다.  
 
 ## texture
 - 하나의 image 자원을 소유한다.
@@ -107,11 +108,11 @@ image:
 - texture loader와 mipmap 생성을 위한 method를 가진다.
 
 
-그외의 skin과 animation 관련된 구조는 아직 구현하지 않고 TODO로 남겨놨다. 이후 사용하는 예제에서 추가할 계획이다.  
+그외의 skin과 animation 관련된 구조는 아직 구현하지 않고 TODO로 남겨놨다. 이후 예제에서 추가할 계획이다.  
 
 # Loading assets
 
-model class에서는 각 자원들을 gltf file로부터 loading한다. 이후 그 자원들의 사용에 필요한 buffer와 descriptor set 등을 생성하고 초기화한다.  
+model class에서는 각 자원들을 glTF file로부터 loading한다. 이후 그 자원들의 사용에 필요한 buffer와 descriptor set 등을 생성하고 초기화한다.  
 
 
 ## flags
@@ -212,7 +213,7 @@ o { background-color: Orange }
 - model의 `draw()`는 모든 nodes를 돌면서 `drawNode()`를 호출해서 draw commands를 recording 한다.
 - `drawNode()`는 tree traversal을 위해서 recursive하게 recording 된다. 
 - `drawNode()` 내부에서는
-  - 그 node가 소유한 mesh의 primitives를 돌면서 `drawIndexed()`를 호출한다. primitive의 index count와 first index가 사용된다.
+  - 그 node가 소유한 mesh의 primitives를 돌면서 `vkCmdDrawIndexed()`를 호출한다. primitive의 index count와 first index가 사용된다.
   - 이때 texture 가 필요시, primitive가 참조한 material을 통해 bind DescriptorSets을 호출한다.
 
 
@@ -220,7 +221,7 @@ o { background-color: Orange }
 최종 결과를 확인하기 위해서, 세개의 pipeline과 그에 해당하는 shader를 작성한다.
 
 - phong
-  - 기본이 되는 pipeline이고, allow derivative flag를 통해 아래 두 pipeline 생성의 base가 되고 효율을 높인다.
+  - 기본이 되는 pipeline이고, allow derivative flag를 통해 아래 두 pipeline 생성의 base가 되어 효율을 높인다.
   - [https://registry.khronos.org/vulkan/specs/1.3/html/chap10.html#pipelines-pipeline-derivatives](https://registry.khronos.org/vulkan/specs/1.3/html/chap10.html#pipelines-pipeline-derivatives)
   - shader는 blinn-phong lighting으로 구현했다.
   - ```glsl
@@ -239,7 +240,7 @@ o { background-color: Orange }
     outFragColor = vec4(ambient + diffuse + specular, 1.0);	
     ```
 - toon
-  - base pipeline과 다를게 없다. viewport의 경우 dynamic state로 지정했기 때문에, command buffer로 변경해주면 된다.
+  - base pipeline과 다를게 없다. viewport의 경우 dynamic state로 지정했기 때문에, command buffer recording에서 변경해줄 수 있다.
   - shader는 다음과 같이 밝기 단계가 discrete 되도록 지정했다.
   - ```glsl
     vec3 N = normalize(inNormal);
