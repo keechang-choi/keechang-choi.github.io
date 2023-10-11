@@ -231,10 +231,10 @@ animation과 pretransform 없이 model instance만 생성하면 다음과 같은
   - blender 에서는 glTF model의 import 할 때, [guess original bind pose](https://docs.blender.org/manual/en/latest/addons/import_export/scene_gltf2.html#id2) 라는 옵션이 있는데, 이걸보면 명시적으로 저장되진 않았지만 guess는 가능한 것 같다. 그리고 joint node의 transform 으로 들어있는 초기값도 의미가 있는 값인지 확인하지 못했다.
 
 
-|   : animation 추가 과정에서 발생가능한 문제 경우들:   ||
+|   : animation 추가 과정에서 발생가능한 문제 경우들:   |                                             |
 | :---------------------------------------------------: | :-----------------------------------------: |
 |         ![image](/images/vge-animation-2.png)         |    ![image](/images/vge-animation-3.png)    |
-|         : pre-transform 관련 문제가 있을 때 :         ||
+|         : pre-transform 관련 문제가 있을 때 :         |                                             |
 |         ![image](/images/vge-animation-4.png)         |    ![image](/images/vge-animation-6.png)    |
 | animation 없이 초기 joint matrices value 활용 시 문제 | inverse bind matrix 사용하지 않았을 시 문제 |
 
@@ -285,11 +285,11 @@ bone 모델은 blender를 사용해서 간단하게 만들었다.
 
 
 
-| bind pose의 bones | animation 중인 bones | 
-|:---: | :---: |
-| ![image](/images/vge-animation-17.png)       |   ![image](/images/vge-animation-7.png)      |
+| bind pose의 bones를 의도했지만 실패한 것 |         animation 중인 bones          |
+| :--------------------------------------: | :-----------------------------------: |
+|  ![image](/images/vge-animation-17.png)  | ![image](/images/vge-animation-7.png) |
 
-좌측의 이미지는 이전 step에서 실패 했던 bind pose의 skeleton을 그린 것이다. 처음에는 좌표축이나 변환의 문제로 보고, 여러 방향과 위치를 다른 색 bone으로 rendering 해보면서 원인을 파악하려 했는데, 변환이나 좌표축 문제는 아닌 것으로 결론지었다.  
+좌측의 이미지는 이전 step에서 실패 했던 bind pose의 skeleton을 그리려는 과정이다. 처음에는 좌표축이나 변환의 문제로 보고, 여러 방향과 위치를 다른 색 bone으로 rendering 해보면서 원인을 파악하려 했는데, 변환이나 좌표축 문제는 아닌 것으로 결론지었다.  
 우측의 animation 구현 후, skeleton이 제 위치에 맞게 출력된 것으로 보아 skeleton과 animation은 제대로 구현된 것을 확인할 수 있었다. bone의 방향과 길이가 적절치 않은 문제는 남아있는데, 이 부분은 다음 step에서 다시 확인한다.  
 
 
@@ -319,9 +319,9 @@ bone 모델은 blender를 사용해서 간단하게 만들었다.
 이제 여러 model instance를 다루기 편해져서, model을 늘리면서 남은 문제점들을 파악하고 있었다.  
 해당 과정에서, 기존에 사용하던 바로 받은 glTF 모델과, blender를 거쳐서 export 된 glTF 모델을 비교하던 중 다음과 같은 문제가 발견돼서 먼저 수정하고 진행했다.
 
-| laptop | desktop | 
-|:---: | :---: |
-| ![image](/images/vge-animation-8.png)       |   ![image](/images/vge-animation-9.png)      |
+|                laptop                 |                desktop                |
+| :-----------------------------------: | :-----------------------------------: |
+| ![image](/images/vge-animation-8.png) | ![image](/images/vge-animation-9.png) |
 
 ### fix
 다른 두 환경에서 undefined 된 상황의 문제가 벌어진 것으로 보여 디버깅 하면서 이상한 값이 변수에 들어있는지 확인하는 과정을 거쳤다.  
@@ -340,9 +340,9 @@ bone의 방향에 관해서는 위의 문제를 해결하니 바로 해결됐다
 - 기존 bone만 blender에서 export된 모델을 쓰고, fox model은 다운로드 받은 모델을 쓰고 있어서, 서로 axis가 달랐다.
 - blender에서 export된 fox와 bone 모델을 사용하니 문제가 해결됐다.
 
-| :fixed fox, skeleton: ||| 
-|:---: | :---: | :---: |
-| ![image](/images/vge-animation-11.png)       |   ![image](/images/vge-animation-12.png)      | ![image](/images/vge-animation-13.png)  |
+|         :fixed fox, skeleton:          |                                        |                                        |
+| :------------------------------------: | :------------------------------------: | :------------------------------------: |
+| ![image](/images/vge-animation-11.png) | ![image](/images/vge-animation-12.png) | ![image](/images/vge-animation-13.png) |
 
 bone의 length는 실제로 glTF에 명시적으로 저장되는 값이 아니라고 한다. 이미 length 개념없이도 animation과 skinning을 표현하는데에는 문제가 없었으므로, 보조적인 개념이라 최적화를 위해 포함하지 않는 것으로 이해했다.  
 
@@ -359,9 +359,14 @@ debugging mode로 build했을 때, 생각보다 너무 느린 400 fps 정도가 
 release mode로 build하니 4000 fps 가까이 측정이 돼서, validation layer나 optimization 관련 여부로 인해 차이가 큰 것을 확인했다. 
 
 
-| : dynamic UBO (color 적용 및 external animation) 추가한 최종 결과: || 
-|:---: | :---: |
-| ![image](/images/vge-animation-14.png)       |   ![image](/images/vge-animation-15.png)      |
+| : dynamic UBO (color 적용 및 external animation) 추가한 최종 결과: |                                        |
+| :----------------------------------------------------------------: | :------------------------------------: |
+|               ![image](/images/vge-animation-14.png)               | ![image](/images/vge-animation-15.png) |
+
+두 이미지 모두 중앙 좌측에 있는 정지한 fox model은 skeleton이 이상한 위치에 나오고 있다. 이 경우에는 joint matrices를 사용하지 않기때문에 skeleton도 의미가 없게 된다.  
+animation을 사용하지 않는 경우는, `node::update()` 가 초기에만 호출되고 이후에는 animationUpdate에서 호출하지 않게되면서 node UBO가 변하지 않게 되는데, 이 초기 설정에서 그 skinned mesh를 가진 node의 transform의 inverse만 가지도록 해줬다. identity를 주는 것이 node hierarchy를 표현하기 위해서 맞을지도 모르겠는데, 아직 이런 예시의 gltf파일은 사용하지 않아서 이 방식으로 유지해놨다. 추후 필요시 수정하면 될 부분이다.
+
+
 
 ![image](/images/vge-animation-3.gif)  
 
