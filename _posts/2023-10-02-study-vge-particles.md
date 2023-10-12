@@ -7,7 +7,7 @@ tags:
   - graphics
 image: 
   path: /images/vge-particle-42.png
-  thumbnail: /images/vge-particle-42.png
+  thumbnail: /images/vge-particle-ship.gif
 ---
 
 compute shader 활용 예제를 base로, 이전에 tutorial에서 작성했던 것 보다 더 다양한 효과 구현에 목표를 뒀다.
@@ -25,11 +25,13 @@ compute shader 활용 예제를 base로, 이전에 tutorial에서 작성했던 �
   - [CLI11 and ImGui](#cli11-and-imgui)
 - [Progress](#progress)
   - [synchronization](#synchronization)
-  - [memory barrier](#memory-barrier)
+    - [memory barrier](#memory-barrier)
   - [particle rendering](#particle-rendering)
   - [particle-calculate-integrate](#particle-calculate-integrate)
     - [pipeline 구성](#pipeline-구성)
+    - [shader 구성](#shader-구성)
     - [specialization Constants](#specialization-constants)
+    - [fix](#fix)
   - [two-body simulation and verification](#two-body-simulation-and-verification)
   - [trajectory](#trajectory)
     - [line drawing](#line-drawing)
@@ -37,6 +39,7 @@ compute shader 활용 예제를 base로, 이전에 tutorial에서 작성했던 �
     - [integration method 비교](#integration-method-비교)
 - [mesh attraction](#mesh-attraction-1)
   - [interaction](#interaction)
+    - [ray-casting](#ray-casting)
   - [triangle uniform distribution](#triangle-uniform-distribution)
     - [work group size](#work-group-size)
   - [skinning in compute shader](#skinning-in-compute-shader)
@@ -64,19 +67,81 @@ compute shader 활용 예제를 base로, 이전에 tutorial에서 작성했던 �
 
 # Prerequisites
 ## numerical integration
-Euler method  
-Runge-Kutta method  
+particle의 움직임을 나타나기 위해 처음 직관적인 접근은 뉴턴 역학을 활용하는 것이다. position을 update 하기 위해서, velocity를 사용하고, velocity를 update하기 위해서 acceleration을 사용하는 방식이다.  
+acceleration은 우리가 지정해준 force에 따라서 계산된다.
+이전까지에는 각각이 미분-적분 관계를 가진다는 기본적인 생각으로 단순하게 시간 간격 dt만 알고 있다면, 적분을 근사해서 원하는 최종 값을 얻을 수 있겠다고 생각했다. (가속도에 dt를 곱해서 속도에 누적시키고, 속도에 dt를 곱해서 위치에 누적시키는 방식)
+하지만 이 dt는 fps에 영향을 받기도 하고, 계산량이 많아진다면 간격이 커지면서 오차가 커질 수 밖에 없다. 그리고, 이 누적된 오차는 global error를 만드는데, 이 error에 따라서 원하는 simulation과 전혀 다른 simulation이 나올 수도 있다. 
+그래서 이 관련된 수치 적분에는 다양한 기법이 존재하는데, 처음 직관적인 방식이 [Euler-method](https://en.wikipedia.org/wiki/Euler_method)라고 한다.  
+이 Euler-method 보다 차수를 높여서, 더 적은 오차를 갖게 하는 방식도 있는데, 여기서는 더 확장된 Runge-Kutta method에 대한 내용을 알면, 나머지는 그 특수한 경우로 볼 수도 있다.
+- [Euler-method](https://en.wikipedia.org/wiki/Euler_method)
+- [midpoint method](https://en.wikipedia.org/wiki/Midpoint_method)
+- [Runge-Kutta method](https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods)
+  - 관련 자료 [https://smath.com/wiki/GetFile.aspx?File=Examples/RK4-2ndOrderODE.pdf](https://smath.com/wiki/GetFile.aspx?File=Examples/RK4-2ndOrderODE.pdf)
+
+error estimation의 order이외에도, 수치 적분의 방식에따라 여러 특성을 가지는데, 아래 문서의 설명들을 보고 개념을 많이 참고 했다.
+[https://adamsturge.github.io/Engine-Blog/mydoc_updated_time_integrator.html](https://adamsturge.github.io/Engine-Blog/mydoc_updated_time_integrator.html)  
+
+그중 `symplecticity` 라는 개념이 있는데, 이는 energy conservation과 관련된 개념으로, simulation의 장기적 결과에 큰 영향을 준다. 
+위의 각 method에 대응되는 method는 다음과 같다고 볼 수 있다.
+- [symplectic-Euler-method](https://en.wikipedia.org/wiki/Semi-implicit_Euler_method)
+- [Stoermer-Verlet method](https://en.wikipedia.org/wiki/Verlet_integration)
+- [fourth-order symplectic method](https://en.wikipedia.org/wiki/Symplectic_integrator#A_fourth-order_example)
+
+해당 내용을 좀 더 이해해보려고, 수학 공부를 조금 다시 해보기도 했는데, Textbook 하나를 잡고 진득하게 공부할 필요가 있을 것 같다. 관련 키워드는 남겨놓겠다.
+- ODE. 관련 주제로 검색했을때는, Ernst Hairer 교재가 많이 나오긴 했다.
+- numerical integration
+- Hamiltonian mechanics (깊게 다루기보다는 주로 numerical integration을 할 예시들이 역학들이고, 수치 적분에서는 미분방정식을 evaluation해야하니 같이 나오는 것 같다.)
+- symplectic integration
+  - flow, differential form
+  - differntial geoemtry관련 내용도 알면 이해하기 좋아보였다.
+
+우선적으로 공부를 할 수는 없을 것 같고, 생각날때 조금씩 알아가야할 것 같아 symplectic function에 대한 개념까지만 공부했다. (integration method가 symplectic한 것은 아직 자세히 보지 못했다.)  
+어쨌든 해당 내용을 공부하지 않더라도, 검색해서 찾은 방식들대로 integration을 구현하면, 에너지가 보존되는 효과를 누릴수 있다.
 
 ## mesh attraction
-
+model의 mesh attraction에도 위의 수치 적분은 동일하게 적용된다. 단지 evalation하는 과정이, n-body simulation에서는 O(n^2) 이지만, mesh attraction에서는 미지 지정한 mesh의 vertice로 attract되도록 지정해주면 된다. (나는 attraction에 공기 저항 처럼 drag에 해당하는 force를 추가해줬다.) 여기서부터는, 물리 simulation이 아니라 특수 효과를 구성한다는 생각으로, 적절한 coefficient 조절을 통해 현실성은 고려하지 않고 보이는 것에만 집중해서 구현할 계획이다.  
+한가지 짚고 넘어갈 점은, model의 vertices 뿐만 아니라, 그 면적 자체에도 attraction이 되도록 구현하는 점이다. 이 부분을 복잡하게 생각했었는데, 다른 구현 코드들을 보니 단순히 particle 개수를 추가해서, 남는 particle들을 mesh의 내부 분할 점으로 attract 시키는 방식을 쓰고 있어 나도 그 방식을 채택했다.  
+이때 쓰이는 테크닉이 삼각형 내부의 uniform한 random point를 생성하는 것인데, 아래 글을 참고해서 작성했다.  
+[https://math.stackexchange.com/questions/18686/uniform-random-point-in-triangle-in-3d](https://math.stackexchange.com/questions/18686/uniform-random-point-in-triangle-in-3d)
 # Plan
 
 ## 작업 순서
+- graviti n-body simulation 구현
+  - integration method를 여러 방식을 option으로 선택할 수 있도록 구현 후 비교
+  - 구현 후, 2-body simulation의 analytic 한 solution 과 비교해서, 옳게 simulation 되는지 검증.
+    - 확인을 위한 particle의 trajectory rendering 기능 구현
+  - particle 개수를 늘려서 성능확인.
+- model attraction 구현
+  - model SSBO 구현 후, dynamics 없이 정지된 particle 위치 확인.
+  - skinning in compute shader 작성
+    - pipeline 및 synchronization 고려
+  - model 선택 기능 추가.
+- 이 예제를 완료 후
+  - PBD 방식에 대한 예제 구현.
+    - cloth simulation도 좋을 것 같다. animation과 상호작용할 수도 있음.
+  - [Publications (matthias-research.github.io)](https://matthias-research.github.io/pages/publications/publications.html) 
+  - CPU vs. GPU (naive) vs. GPU (PBD) 계산 성능 비교
+    - collision 관련 예제를 만들어 봐도 좋겠다는 생각이 듦.
 ## CLI11 and ImGui
+구현하면서 command line argument와 ImGui을 통한 옵션 선택을 적극적으로 추가할 계획이다.  
+처음에 단순한 초기 설정들은 CLI11을 통해 구현했고, 이후 복잡한 선택이 필요한 값들은 ImGui widget을 추가해서 구현했다.  
+
+두 방식을 모두 쓰는 값도 있어서 코드의 일관성이 조금 깨진 측면도 있지만, 앞서 밝힌대로 엄격하지 않게 해당 기능들을 필요시 편하게 추가할 계획이다.
 
 # Progress
 ## synchronization
-## memory barrier
+[https://vkguide.dev/docs/gpudriven/compute_shaders/#compute-shaders-and-barriers](https://vkguide.dev/docs/gpudriven/compute_shaders/#compute-shaders-and-barriers)  
+### memory barrier
+
+[https://www.khronos.org/blog/understanding-vulkan-synchronization](https://www.khronos.org/blog/understanding-vulkan-synchronization)
+
+[https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#transfer-dependencies](https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#transfer-dependencies)
+
+[https://registry.khronos.org/vulkan/specs/1.3/html/vkspec.html#synchronization-queue-transfers](https://registry.khronos.org/vulkan/specs/1.3/html/vkspec.html#synchronization-queue-transfers)
+
+[https://stackoverflow.com/questions/60310004/do-i-need-to-transfer-ownership-back-to-the-transfer-queue-on-next-transfer](https://stackoverflow.com/questions/60310004/do-i-need-to-transfer-ownership-back-to-the-transfer-queue-on-next-transfer)
+
+
 
 ## particle rendering
 ![image](/images/vge-particle-0.png)  
@@ -86,7 +151,12 @@ Runge-Kutta method
 ## particle-calculate-integrate
 
 ### pipeline 구성
-### specialization Constants
+
+### shader 구성
+
+gl_GlobalInvocationID
+
+gl_LocalInvocationID
 
 ![image](/images/vge-particle-3.png)  
 ![image](/images/vge-particle-4.png)  
@@ -100,7 +170,23 @@ Runge-Kutta method
 ![image](/images/vge-particle-8.png)  
 ![image](/images/vge-particle-9.png)  
 
+### specialization Constants
+
+
+[Template argument deduction - cppreference.com](https://en.cppreference.com/w/cpp/language/template_argument_deduction#Non-deduced_contexts)
+
+### fix
+shader numParticles
+
+[https://registry.khronos.org/OpenGL-Refpages/gl4/html/barrier.xhtml](https://registry.khronos.org/OpenGL-Refpages/gl4/html/barrier.xhtml)
+
+
+[https://registry.khronos.org/OpenGL-Refpages/gl4/html/memoryBarrier.xhtml](https://registry.khronos.org/OpenGL-Refpages/gl4/html/memoryBarrier.xhtml)
+
+
 ## two-body simulation and verification
+[https://evgenii.com/blog/two-body-problem-simulator/](https://evgenii.com/blog/two-body-problem-simulator/)
+
 
 ![image](/images/vge-particle-10.png)  
 ![image](/images/vge-particle-11.png)  
@@ -134,6 +220,8 @@ Runge-Kutta method
 
 ## interaction
 ![image](/images/vge-particle-model.gif)
+
+### ray-casting
 ## triangle uniform distribution
 
 ![image](/images/vge-particle-48.png)  
