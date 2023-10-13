@@ -312,10 +312,26 @@ write operation의 state라고 볼 수 있다.
 - making memory visible : invalidating caches
 
 메모리 의존을 availability operation과 visibility operation을 포함한 실행 의존으로 볼 수도 있는데, 다음과 같다.
-- 1번 연산 set이 availbility operation 이전에 일어난다.
-- availability operaion이 visibility opertion 이전에 일어난다.
+- 1번 연산 set이 availability operation 이전에 일어난다.
+- availability operation이 visibility opertion 이전에 일어난다.
 - visibility operation이 2번 연산 set 이전에 일어난다.
 
+pipeline barrier에서 일어나는 4가지 순서를 좀 더 설명하면
+- src stage mask가 끝나기를 기다린다
+- src stage mask와 src access mask조합 에서 일어난 writes 들을 available하게 만든다.
+- available 해진 memory를 다음 dst stage mask와 dst access masmk 조합에 visible 하도록 만든다.
+- dst stage mask의 작업을 unblock 한다.
+
+TOP_OF_PIPE / BOTTOM_OF_PIPE
+- 이 가상의 stage를 쓸일들이 있는데, 이는 execution barrier를 위한 것이지 memory barrier와는 무관하다.
+- 이 단계들은 없는 실제로 없는 단계라 아무런 메모리 접근이 일어나지 않는다. 따라서 access mask는 0으로 지정해줘야한다.
+- TOP_OF_PIPE 예시
+  - 이미지를 할당한 직후, layout transition을 하고 싶고, 아무것도 기다릴 게 없을때.
+  - flush out 될 writes가 없다. vulkan에서 새로 할당된 메모리는 항상 모든 stage와 access type에서 available and visible.
+- BOTTOM_OF_PIPE 예시
+  - swapchain이미지를 presentation engine에 넘기기 직전.
+  - `VK_IMAGE_LAYOUT_PRESENT_SRC_KHR`로 transition이 필요하다. (우리는 render pass 생성할 때 지정해놨다.)
+  - 이 transition 이후에는 메모리를 visible하게 만들 stage가 없다.
 
 ### renderPass subpass dependencies
 image memory barrier와 크게 다를게 없다고 함. 대상이 특정 image memory가 아니고 attachment임.  
