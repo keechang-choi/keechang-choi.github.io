@@ -288,6 +288,8 @@ within a queue에관한 synchronization
 queue에 제출한 command 들이 시작하는 순서는 지켜지지만, 끝나는 순서는 out of order이므로 이 순서를 control 하기 위한 기능이다.  
 - execution
   - 각 command가 pipeline stage를 거쳐서 실행되는데, execution barrier를 지정해주면 더 효율적인 최적화가 가능하다. stage를 지정해주지 않으면 all commands에 대해서 동작한다.
+  - first synch scope에 해당하는 것은 submission order가 이른 commands중 src stage mask에 의해 지정된 pipeline stage에서의 연산들이다.
+  - second synch scope에 해당하는 것은 submission order가 늦은 commands 중 dst stage mask에 의해 지정된 pipeline stage에서의 연산들이다.
   - 영상에서 예시 상황을 묘사해줌
 - memory
   - 한 자원에 write해놓고, 이후에 read하고 싶은 상황에서 실행 의존만으로 충분하지 않다. 메모리 구조 (캐시)와 관련된 내용인데, 이를 컨트롤 하기 위한 memory dependency 개념이 필요함
@@ -328,10 +330,12 @@ TOP_OF_PIPE / BOTTOM_OF_PIPE
 - TOP_OF_PIPE 예시
   - 이미지를 할당한 직후, layout transition을 하고 싶고, 아무것도 기다릴 게 없을때.
   - flush out 될 writes가 없다. vulkan에서 새로 할당된 메모리는 항상 모든 stage와 access type에서 available and visible.
+  - src stage mask로 쓰였을 때, 아무것도 기다리지 않는다는 뜻이 된다.
 - BOTTOM_OF_PIPE 예시
   - swapchain이미지를 presentation engine에 넘기기 직전.
   - `VK_IMAGE_LAYOUT_PRESENT_SRC_KHR`로 transition이 필요하다. (우리는 render pass 생성할 때 지정해놨다.)
   - 이 transition 이후에는 메모리를 visible하게 만들 stage가 없다.
+  - dst stage mask로 쓰였을 때, last stage를 block 시키겠다는 뜻으로, 이 barrier 이후의 기다려줘야 될 작업이 없다는 뜻이 된다.
 
 ### renderPass subpass dependencies
 image memory barrier와 크게 다를게 없다고 함. 대상이 특정 image memory가 아니고 attachment임.  

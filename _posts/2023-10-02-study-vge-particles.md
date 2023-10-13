@@ -27,8 +27,9 @@ compute shader 활용 예제를 base로, 이전에 tutorial에서 작성했던 �
   - [synchronization](#synchronization)
     - [memory barrier](#memory-barrier)
   - [particle rendering](#particle-rendering)
+    - [graphics pipeline](#graphics-pipeline)
   - [particle-calculate-integrate](#particle-calculate-integrate)
-    - [pipeline 구성](#pipeline-구성)
+    - [compute pipeline 구성](#compute-pipeline-구성)
     - [shader 구성](#shader-구성)
     - [specialization Constants](#specialization-constants)
     - [fix](#fix)
@@ -177,30 +178,83 @@ pipeline barrier에 SSBO buffer memory barrier를 사용해서 execution/memory 
     - release
       - pipeline barrier가 제출하는 queue가 src queue family index에 해당한다.
       - dst access mask는 무시된다. visibility operation이 실행되지 않는다. 
-      - release operation은  availability operation이후에 실행되고, second synchronization scope의 연산들 이전에 실행된다.
+      - release operation은 availability operation이후에 실행되고, second synchronization scope의 연산들 이전에 실행된다.
     - acquire
       - pipeline barrier가 제출하는 queue가 dst queue family index에 해당한다.
       - 이전에 release한 자원의 영역과 일치해야 한다.
       - src access mask가 무시된다. availability operation이 실행되지 않는다.
       - acquire operation은 first synchronization scope의 연산들 이후에 실행되고, visibility operation 이전에 실행된다.
     - 그리고 이 release와 acquire 연산들은 알맞은 순서에 실행되도록 app에서 semaphore등의 사용을 통해 execution dependency를 지정해야 한다고 한다.
+      - 우리도 semaphore를 통해 execution dependency를 주었는데, 사용될 부분을 미리 살펴보면 다음과 같아서 이다.
+        - [1] storage buffer 로 buffer copy 직후 graphics queue에서 release (transfer queue는 별도로 쓰지 않고 graphics queue를 사용했음)
+        - [2] compute command recording에서, compute queue에서 acquire
+        - [3] recording 끝낸 후, compute queue에서 release
+        - [4] draw command recording에서, graphics queue에서 acquire
+        - [5] recording 끝낸 후, graphics queue에서 release
+      - 일단 첫 release는 초기화 단계이므로 가장 먼저 실행 후 마무리 된다. (`oneTimeSubmit()`을 사용했기 때문에 `waitIdle()` 과정을 통해 host에서 완료를 기다림)
+      - `buildComputeCommandBuffers()` 를 먼저 호출하고 제출하게 되는데, 이때 사용하는 semaphores는 다음과 같다.
+        - wait: `graphics.semaphores[currenrFrameIndex]`
+        - signal: `compute.semaphores[currenrFrameIndex]`
+      - 그 후 draw 목적의 `buildCommandBuffers()` 를 호출하고 제출하는데, 이때 사용하는 semaphores는 다음과 같다.
+        - wait: `compute.semaphores[currenrFrameIndex]` (기존 presentCompleteSemaphores도 여전히 있다.)
+        - signal: `graphics.semaphores[currenrFrameIndex]` (기존 renderCompleteSemaphores도 여전히 있다.)
+      - 추가되는 semaphores는 두가지 종류의 frames in flight 수 만큼이고, 이 중 graphics의 것만 signaled 상태로 생성한다.
+      - 정리해보면 첫 frame rendering 과정에서는 [1]의 release 이후, ([2]의 acquire과 [3]의 release)가 ([4]의 acquire과 [5]의 release) 보다 먼저 실행이 완료되고, 그 후 ([4], [5])의 실행이 완료되면 다시 ([2], [3]) 의 실행 완료가 반복되는 구조이다.
+        - [2]와 [3]의 순서는 semaphore가 아니라, acquire에서 지정한 dst stage mask로 인해 생긴 execution dependency chain으로 강제된다.
+          - acquire시 second synch scope는 dst stage mask로 지정할 `ComputeShader` stage의 연산들이 되고, 그 사이에 dispatch 명령이 있고, 그 후에 release 시 first synch scope는 src stage mask로 지정할 `ComputeShader` stage의 연산들이 된다.
+          - 결국 release, acquire의 정의 시 언급 된 실행 순서에 따라서, [2]의 acquire이후 [3]의 release 실행을 보장할 수 있게 된다.
+          - action type commands이외에는 stage의 개념이 없으므로, 다른 `vkCmdPipelineBarrier()` 자체가 synch scope에 포함된다고 볼 수는 없을 것 같다.
+        - 마찬가지로 [4]와 [5]도 중간에 지정해주는 `VertexInput` stage의 역할로 인해 execution dependency가 생길 것이다.
+      - 그리고 각 pipelineBarrier에서 해당되는 src/dst stage mask 이외에는 none pipeline stage (top/bottom)을 사용해줬는데, 각각 기다릴 것이 없고 기다리게할 것이 없게 해서 알아서 최적화 되도록 설정해줄 수 있다.
 - 예시
   - [https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#transfer-dependencies](https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#transfer-dependencies)
   - transfer 과정에서 이후에 사용할 queue의 family index가 다른 경우는 Queue ownership transfer를 수행해주고 있다.
   - [https://stackoverflow.com/questions/60310004/do-i-need-to-transfer-ownership-back-to-the-transfer-queue-on-next-transfer](https://stackoverflow.com/questions/60310004/do-i-need-to-transfer-ownership-back-to-the-transfer-queue-on-next-transfer)
-    - 위 예시에 해당하는 질문글이다.
-    - 
-
+    - 위 예시에 해당하는 질문글이고, semaphore 사용과 double buffering 사용시 장점등을 답변하고 있다.
 
 
 ## particle rendering
-![image](/images/vge-particle-0.png)  
-![image](/images/vge-particle-1.png)  
-![image](/images/vge-particle-2.png) 
+
+
+다음은 particle rendering과 shader에 관련된 부분의 진행과정이다.
+
+
+|                image                 |                                                                                                                                                                 explanation                                                                                                                                                                  |
+| :----------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| ![image](/images/vge-particle-0.png) | particle은 계산된 position과 `gl_PointSize` 를 이용해서, fragment shader에서 원 형태의 sprite가 되도록 표현했다. alpha값을 조절해서 중앙이 더 진하게 보이도록 설정했다. <br> 원 주변의 사각형이 겹친 부분은 depth가 제대로 구현되지 않았는데, transparent 관련 구현 대신 depthTestEnable을 끄고 pipeline state를 생성하는 방식으로 해결했다. |
+| ![image](/images/vge-particle-1.png) |                                                              원형의 sprite와 alpha 값 조절은 잘 표현되었지만, depthTest가 꺼졌기 때문에, 더 뒤에 있어야 할 파란 점들이 초록 점들을 뚫고 보이는 현상이다. 이를 제거하기 위해 additive color blend 방식으로 보여지도록 설정했다.                                                               |
+| ![image](/images/vge-particle-2.png) |                                                                                additive color blend로 겹친 부분이 흰색에 가깝게 보이도록 빛나는 효과를 의도한 결과이다. <br> color blend로 1, 1, add를 설정해 줬고, alpha blend로 src, dst, add를 설정해줬다.                                                                                |
+
+
+### graphics pipeline
+graphics pipeline은 위처럼 particle rendering으로만 단순하게 구성되어 있다.
+추후에 trajectory를 추가하면서, trajectory pipeline을 추가하게 된다.
 
 ## particle-calculate-integrate
+파이프라인과 그 shader 구성은 크게 2-step으로 이뤄진다.  
+- 1-step에서 differential equation의 evalution을 통해 그 시점에 필요한 값들을 계산한다. (주로 가속도 계산이라고 생각하면 된다.)
+- 2-step에서는 계산된 값들을 누적시키는 적분을 수행한다. 최종 position도 계산한다.
 
-### pipeline 구성
+이 두 단계에서 생성하는 값과 계산에 이용하는 값들은 integration method에 따라 다르다. 그리고 integration method의 stage가 여러개 필요한 경우도 있는데, Runge-Kutta method 같은 경우는 1-step을 4번의 stage로 나눠서 계산을 해야 한다. 결국 오차를 줄이는 것과, 계산 비용의 trade-off가 있다고 보면 될 것 같다.  
+Euler method와 symplectic-Euler method를 비교했을 때는, 연산량의 차이가 없어서 사용하지 않을 이유가 없다.
+### compute pipeline 구성
+- 1-step
+  - 기본적으로 SSBO는 particle의 position과 velocitity 정보를 저장한다.
+  - 이외에 1-step에서 계산해야 할 값이 $\frac{dp}{dt}, \; \frac{dv}{dt}$인데, integration method에 따라서 이런 값이 각각 4개씩 까지 늘어난다. 그래서 particle data의 구조는 pos, vel, pk[4], vk[4] 로 구성했다.
+    - 이 크기를 dynamic하게 생성해서 buffer 생성시에 설정하려고 했는데, struct 구조를 dynamic하게 바꿔야하다 보니, 적절한 방법을 찾지 못했다. 이 data 여러개를 한번에 `std::memcpy()`를 통해 SSBO로 전달해줘야 하므로 다른 stl container를 쓸 수는 없어서 조사하던 중 template programming의 방식이면 가능할지도 모르겠다는 결론에 도달했다. particle 수를 매우 큰 값으로 생성할 수 있으니 이 particle 하나의 data 량은 buffer 크기 등 영향을 많이 미치는 값이라 최적화 할 수 있으면 좋겠지만 우선은 4개씩 사용하도록 고정해놨다. 추후에 개선할 점이다.
+  - 이 최대 4개의 값은 순서대로 하나씩 계산될 수 있는 값이면서 differential equation의 evaluation이 필요한 과정이라 (가속도를 구하는 O(n^2)의 과정)을 최대 4번 해야한다.
+  - 이 반복을 위해서, 1-step의 pipeline과 command recording은 최대 4번 반복 가능하도록 loop를 사용해서 구현의 복잡성을 줄였다. 이 값은 처음에는 command line args로 받거나 restart imGui option으로 받아서, pipeline 생성시 사용하는 구조로 되어있다.
+- 2-step
+  - 2-step은 비교적 간단하다, 오래걸리는 연산도 없고 어떤 종류의 integration method 든지 한번만 실행되면 된다.
+  - binding 될 SSBO도 고정해놨으므로 각 method마다 차이점은 shader 구현에만 있다.
+  - 여기서 계산된 particle의 position이 위에서 구현한 particle shader로 전달되게 된다. 그리고 그때의 graphics commands 들과의 synchronization은 Queue owenership transfer 부분에서 미리 설명한 것과 같이 semaphore를 통해 정의되게 된다.
+- 1-step과 2-step 사이의 execution dependency
+  - 처음 예제를 따라 작성할때는, 하나의 SSBO만 사용했기 때문에, 1-step 계산전에 buffer의 내용을 2-step에서 변경시키면 안되기 때문에 필요하다고 생각했다.
+  - 현재 double-buffering(혹은 N-buffering)으로 구현한 상태에서는, 읽어오는 입력값들은 이전 `prevFrameIndex`의 SSBO를 사용하기 때문에 위의 문제는 없다.
+  - 하지만, i번 particle에 대한 step-1의 연산이 끝나야 생성된 값들을 사용해서 i번 particle의 step-2번을 실행할 수 있으므로 실행 순서가 여전히 필요하긴 하다. 
+    - 지금 드는 생각인데, calculus뒤에 integrate 내용을 붙여서 하나로 구성하면 큰 문제가 없을지도 모르겠다.
+    - 성능상 이점이 있을지는 실험해봐야겠지만, 구현상 복잡도는 더 커진다. 1-step만 여러번 반복이 필요한 경우가 있어서 2-step과 분리해놓는게 편하다.
+- 이 구성은 나중에 추가한 [skinning in compute shader](#skinning-in-compute-shader) 구현 이전까지 유지되고, 이 skinnging을 위한 pipeline은 step-1 이전에 추가된다. (step-1에서 가속도 계산에 필요하므로)
 
 ### shader 구성
 
@@ -208,17 +262,18 @@ gl_GlobalInvocationID
 
 gl_LocalInvocationID
 
-![image](/images/vge-particle-3.png)  
-![image](/images/vge-particle-4.png)  
-![image](/images/vge-particle-5.png)  
+|                                      |                                         |                                      |
+| :----------------------------------: | :-------------------------------------: | :----------------------------------: |
+| ![image](/images/vge-particle-3.png) |  ![image](/images/vge-particle-4.png)   | ![image](/images/vge-particle-5.png) |
+| : ![image](/images/vge-particle-2.gif) : |||
 
 
-![image](/images/vge-particle-2.gif) 
 
-![image](/images/vge-particle-6.png)  
-![image](/images/vge-particle-7.png)  
-![image](/images/vge-particle-8.png)  
-![image](/images/vge-particle-9.png)  
+
+|   : 색 변경 및 attractor수 조절 :   ||
+| :----------------------------------: | :----------------------------------: |
+| ![image](/images/vge-particle-6.png) | ![image](/images/vge-particle-7.png) |
+| ![image](/images/vge-particle-8.png) | ![image](/images/vge-particle-9.png) |
 
 ### specialization Constants
 
