@@ -58,7 +58,7 @@ compute shader 활용 예제를 base로, 이전에 tutorial에서 작성했던 �
   - 기본 틀은 위 예제를 따라가며 작성할 계획이다. 이전 보다 조금 더 복잡한 계산이 compute shader에서 실행되는 만큼, shared memory 사용 및 compute pipeline 구성과 syncrhonization에 초점을 맞췄다.
 - 아래 자료들은 모두 particle dreams 예시의 내용을 다루는데, webGL로 작성된 것들은 demo를 브라우저에서 실행해볼 수 있게 되어 있어서 실행해보며 어떤 기능들을 넣을지 구상할 수 있었다.
   - [Particle Dreams (karlsims.com)](http://www.karlsims.com/particle-dreams.html)
-  - [A Particle Dream | Nop Jiarathanakul (iamnop.com)](https://www.iamnop.com/works/a-particle-dream)
+  - [A Particle Dream \| Nop Jiarathanakul (iamnop.com)](https://www.iamnop.com/works/a-particle-dream)
   - [https://github.com/byumjin/WebGL2-GPU-Particle](https://github.com/byumjin/WebGL2-GPU-Particle)
 - animation in compute shader
   - 이전 예제에서 animation 계산을 (정확히는 animation update는 cpu에서 하고, 계산된 joint matrices를 활용한 skinning계산을) vertex shader에서 실행했는데, 이번 예제 구현에서는 vertex shader 이전 단계에서 모든 animation이 완료된 animated vertices data가 SSBO형태로 필요하다. 
@@ -102,7 +102,7 @@ error estimation의 order이외에도, 수치 적분의 방식에따라 여러 �
 어쨌든 해당 내용을 공부하지 않더라도, 검색해서 찾은 방식들대로 integration을 구현하면, 에너지가 보존되는 효과를 누릴수 있다.
 
 ## Mesh Attraction
-model의 mesh attraction에도 위의 수치 적분은 동일하게 적용된다. 단지 evalation하는 과정이, n-body simulation에서는 O(n^2) 이지만, mesh attraction에서는 미지 지정한 mesh의 vertice로 attract되도록 지정해주면 된다. (나는 attraction에 공기 저항 처럼 drag에 해당하는 force를 추가해줬다.) 여기서부터는, 물리 simulation이 아니라 특수 효과를 구성한다는 생각으로, 적절한 coefficient 조절을 통해 현실성은 고려하지 않고 보이는 것에만 집중해서 구현할 계획이다.   
+model의 mesh attraction에도 위의 수치 적분은 동일하게 적용된다. 단지 evalation하는 과정이, n-body simulation에서는 $$ O(n^2) $$ 이지만, mesh attraction에서는 미지 지정한 mesh의 vertice로 attract되도록 지정해주면 된다. (나는 attraction에 공기 저항 처럼 drag에 해당하는 force를 추가해줬다.) 여기서부터는, 물리 simulation이 아니라 특수 효과를 구성한다는 생각으로, 적절한 coefficient 조절을 통해 현실성은 고려하지 않고 보이는 것에만 집중해서 구현할 계획이다.   
 
 한가지 짚고 넘어갈 점은, model의 vertices 뿐만 아니라, 그 면적 자체에도 attraction이 되도록 구현하는 점이다. 이 부분을 복잡하게 생각했었는데, 다른 구현 코드들을 보니 단순히 particle 개수를 추가해서, 남는 particle들을 mesh의 내부 분할 점으로 attract 시키는 방식을 쓰고 있어 나도 그 방식을 채택했다.  
 이때 쓰이는 테크닉이 삼각형 내부의 uniform한 random point를 생성하는 것인데, 아래 글을 참고해서 작성했다.  
@@ -123,7 +123,7 @@ model의 mesh attraction에도 위의 수치 적분은 동일하게 적용된다
 > $$  
 > 위의 방식으로 계산된 random variable p는, 삼각형 ABC 내부의 uniform distribution을 따르게 된다.
 
-이 좌표를 target으로, particle들이 attract되게 만들면, model의 mesh를 채우게 될 수 있을 것이다. attract되는 정도, particle의 수, 크기, 색상 등을 조정할 옵션을 만들고, mouse click 을 통한 interaction을 추가하는 것 까지가 계획이다.  
+이 좌표를 target으로, particle들이 attract되게 만들면, model의 mesh를 채우게 될 수 있을 것이다. attract되는 정도, particle의 수, 크기, 색상 등을 조정할 옵션을 만들고, mouse click 을 통한 interaction을 추가하는 것까지가 계획이다.  
 
 # Plan
 
@@ -241,9 +241,9 @@ Euler method와 symplectic-Euler method를 비교했을 때는, 연산량의 차
 ### Compute Pipeline 구성
 - `step-1`
   - 기본적으로 SSBO는 particle의 position과 velocitity 정보를 저장한다.
-  - 이외에 `step-1`에서 계산해야 할 값이 $\frac{dp}{dt}, \; \frac{dv}{dt}$인데, integration method에 따라서 이런 값이 각각 4개씩 까지 늘어난다. 그래서 particle data의 구조는 pos, vel, pk[4], vk[4] 로 구성했다.
+  - 이외에 `step-1`에서 계산해야 할 값이 $$\frac{dp}{dt}, \; \frac{dv}{dt}$$인데, integration method에 따라서 이런 값이 각각 4개씩 까지 늘어난다. 그래서 particle data의 구조는 pos, vel, pk[4], vk[4] 로 구성했다.
     - 이 크기를 dynamic하게 생성해서 buffer 생성시에 설정하려고 했는데, struct 구조를 dynamic하게 바꿔야하다 보니, 적절한 방법을 찾지 못했다. 이 data 여러개를 한번에 `std::memcpy()`를 통해 SSBO로 전달해줘야 하므로 다른 stl container를 쓸 수는 없어서 조사하던 중 template programming의 방식이면 가능할지도 모르겠다는 결론에 도달했다. particle 수를 매우 큰 값으로 생성할 수 있으니 이 particle 하나의 data 량은 buffer 크기 등 영향을 많이 미치는 값이라 최적화 할 수 있으면 좋겠지만 우선은 4개씩 사용하도록 고정해놨다. 추후에 개선할 점이다.
-  - 이 최대 4개의 값은 순서대로 하나씩 계산될 수 있는 값이면서 differential equation의 evaluation이 필요한 과정이라 (가속도를 구하는 O(n^2)의 과정)을 최대 4번 해야한다.
+  - 이 최대 4개의 값은 순서대로 하나씩 계산될 수 있는 값이면서 differential equation의 evaluation이 필요한 과정이라 (가속도를 구하는 $$ O(n^2) $$의 과정)을 최대 4번 해야한다.
   - 이 반복을 위해서, `step-1`의 pipeline과 command recording은 최대 4번 반복 가능하도록 loop를 사용해서 구현의 복잡성을 줄였다. 이 값은 처음에는 command line args로 받거나 restart imGui option으로 받아서, pipeline 생성시 사용하는 구조로 되어있다.
 - `step-2`
   - `step-2`은 비교적 간단하다, 오래걸리는 연산도 없고 어떤 종류의 integration method 든지 한번만 실행되면 된다.
@@ -260,20 +260,20 @@ Euler method와 symplectic-Euler method를 비교했을 때는, 연산량의 차
 ### Compute Shader 구성
 
 - `step-1`의 compute shader 구현 [shaders/particle/particle_calculate.comp](https://github.com/keechang-choi/Vulkan-Graphics-Example/blob/main/shaders/particle/particle_calculate.comp)
-  - pipeline에서 설명한대로, 모든 particle pair로 발생하는 attraction의 가속도 계산의 $O(n^2)$ 의 과정이 구현되어 있다.
+  - pipeline에서 설명한대로, 모든 particle pair로 발생하는 attraction의 가속도 계산의 $$O(n^2)$$ 의 과정이 구현되어 있다.
   - prevFrameIndex의 particle SSBO는 read only qualifier로 명시한다.
   - currentFrameIndex의 particle SSBO에 이후 적분 계산에 쓰일 값들을 계산해서 저장한다.
   - UBO로 전달되는 값들 중 사용하는 값은 다음과 같다.
     - dt: frame 사이에 시간이 얼마나 흘렀는지를 측정한 값으로 delta timing에 사용됨
     - particleCount: particle 수 보다 많은 invocation이 이뤄질 경우에 대한 처리
-      - 예를들어, local workgroup dimension이 (256,1,1)이라고 하면, $ floor(numParticles/256)+1 $ 만큼의 local workgroup들이 `vkCmdDispatch()`에 의해 실행될 것이다.
+      - 예를들어, local workgroup dimension이 (256,1,1)이라고 하면, $$ floor(numParticles/256)+1 $$ 만큼의 local workgroup들이 `vkCmdDispatch()`에 의해 실행될 것이다.
       - 이때 numParticles가 256의 배수가 아닐때는, 항상 [`gl_GlocalInvocationID`](https://registry.khronos.org/OpenGL-Refpages/gl4/html/gl_GlobalInvocationID.xhtml)가 numParticles보다 큰 invocation이 실행될 것인데, 이런 경우를 걸러주기 위해서 필요하다.
     - gravity coefficient: 중력상수 역할의 계수
     - power coefficient: 거리 제곱의 값에 취할 지수. 구현 상 1.5 값으로 지정하면 실제 inverse square law에 해당한다.
     - soften coefficient 이다. 
   - specialization constant 다음 값들을 전달 받는데, 이 값들은 상수로 사용되지만, compile time이 아니라 runtime에서 pipeline 생성시 전달해준 값들로 정해진다.
     - 위의 계수 3가지 값도 원래는 specialization constant로 넘겨줬었는데, 실행하면서 변경해보는 것이 편해서 UBO로 형태를 바꿨다.
-    - SHARED_DATA_SIZE: $O(n^2)$ 계산의 성능을 높이기 위한 shared memory 사용시 지정할 크기. 전체적인 shader loop와 관련있다.
+    - SHARED_DATA_SIZE: $$O(n^2)$$ 계산의 성능을 높이기 위한 shared memory 사용시 지정할 크기. 전체적인 shader loop와 관련있다.
     - INTEGRATOR: integration method의 type
     - INTEGRATOR_STEP: `step-1`을 여러번 반복하기 위해서 pipeline도 여러개를 생성하는데, 생성할 때마다 단계를 하나씩 높여서 생성하기 위한 변수이다. 내부 입출력 형태나 위치를 지정할 때 분기로 사용된다.
     - local_size_x_id: local workgroup의 dimension
@@ -283,7 +283,7 @@ Euler method와 symplectic-Euler method를 비교했을 때는, 연산량의 차
     - 한 particle의 가속도 계산에서 모든 particle의 위치가 필요하므로 loop가 필요하다. 단순히 0~ubo.particleCount-1 의 loop를 돌지 않고, 두 index i, j와 sharedData를 사용한다.
     - i는 0부터 SHARED_DATA_SIZE 만큼 증가시키며 iteration
       - [i+`gl_LocalInvocationID`.x] index의 particle의 입력값(position 혹은 `step-1`의 이전 stage에서 계산된 결과인 `pk[4]`의 값들) 을 sharedData[`gl_LocalInvocationID`.x]에 저장한다.
-        - [gl_LocalInvocationID.x](https://registry.khronos.org/OpenGL-Refpages/gl4/html/gl_LocalInvocationID.xhtml) 는 같은 work group에서의 각 invocation index이다. $\in [0, \text{gl_WorkGroupSize.x}-1]$
+        - [gl_LocalInvocationID.x](https://registry.khronos.org/OpenGL-Refpages/gl4/html/gl_LocalInvocationID.xhtml) 는 같은 work group에서의 각 invocation index이다. $$\in [0, \text{gl_WorkGroupSize.x}-1]$$
         - 이 particleCount를 넘어가면 사용하지 않을 목적으로 입력정보 대신 0을 넣어놓는다. (이 사용하지 않을 값이 divide by zero 등의 계산상 문제를 일으키지 않을지 주의)
       - synchronization
         - momory control
@@ -356,7 +356,7 @@ a는 type이 고정되어 있기 때문에 implicit constructor 사용이 문제
 
 
 ## Two-Body Simulation and Verification
-이제 눈에 보이는 simulation 결과를 얻게되었다. 그래서 이 결과가 의도대로 동작하는지 점검하고 다음 과정으로 진행해고자 했다.  
+이제 눈에 보이는 simulation 결과를 얻게되었다. 그래서 이 결과가 의도대로 동작하는지 점검하고 다음 과정을 진행하고자 했다.  
 - 다음과 같이 다른 simulation 자료와 비교하면서 확인을 했다.
   - [https://evgenii.com/blog/two-body-problem-simulator/](https://evgenii.com/blog/two-body-problem-simulator/)
 - 다음 처럼 간단한 경우인 2-particle이 원운동을 하도록 수치를 조정해서 실행했다.
@@ -411,8 +411,12 @@ two-body simulation 결과를 가지고, integration method를 바꿔보면서 �
 이를 위해 옵션 설정도 늘리고, 거리나 energy 등의 값도 plot 하도록 imGui 기능들을 추가했다.  
 
 ### Integration Method 비교
-- 같은 시간 간겨에서 error estimation order가 높은 방식을 사용할수록 오차가 줄어드는 것을 확인했다.
+- 같은 시간 간격에서 error estimation order가 높은 방식을 사용할수록 오차가 줄어드는 것을 확인했다.
+  - 1차 -> 2차 -> 4차
 - 같은 order라면, symplectic 방식이 장기적으로 더 안정적인 결과를 준다.
+  - Euler vs. simplectic Euler
+  - midpoint vs. Verlet
+  - Runge-Kutta vs. 4th-order symplectic
 - 비교를 위해 시간간격 기준을 여러번 바꿔가면서 각 방식들을 실행해봤는데, 상대적으로 큰 시간간격을 사용하면 갑자기 큰 오차가 나올때도 있고, 상대적으로 작은 시간간격을 사용하면 차이가 나타나지 않을때도 있었다.
 - 오차 수치들이 시간에 따라서 어떤 scale로 변하는지 등 구현과 상관관계를 보기위해서는 data를 export해서 더 자세히 분석할 필요가 있어서 어느정도 눈에 보이는 결과만 확인하고 정량적 분석은 하지 않고 넘어갔다.
 
@@ -424,7 +428,7 @@ two-body simulation 결과를 가지고, integration method를 바꿔보면서 �
 | :어느정도 정상적인 궤도가 나오더라도 확대해보면 멀어지고 있음: ||
 
 높은 차수의 integrator 들을 실험한 내용은 다음과 같다.
-- delta time 간격이 큰 경우에 가끔씩 큰 오차가 나타남
+- delta time 간격이 큰 경우에 가끔씩 큰 오차가 나타남. 정확한 원인 파악하지 못함.
 - soften 을 크게하면 잘 나타나지 않음 
 - 다른 coefficient 설정에서도 동일한 양상이 나타남. 특히 거리가 가까워져서 속력이 큰 경우 오차가 커지는데, 이런 설정에서는 높은 order의 method가 더 정확한 계산을 해주는 것이 두드러짐.
 
@@ -450,7 +454,7 @@ two-body simulation 결과를 가지고, integration method를 바꿔보면서 �
   - 정지된 모델로 이동하는 것을 구현하고 나면, model instance를 옮기거나, model의 animation된 vertice들로 attract 되는 기능을 추가한다.
   - 이를 위해서는 미리 compute shader를 활용해서 계산된 animated model vertices를 저장하고 있어야 한다.
 - tail optimization
-  - $O(n^2)$ 연산이 필요 없으므로 vertex수가 이전보다 훨씬 많을 수 있는데, 이를 반영했을 때 이전과 같은 방식의 trajectory 기능을 사용하면 너무 느려진다.
+  - $$O(n^2)$$ 연산이 필요 없으므로 vertex수가 이전보다 훨씬 많을 수 있는데, 이를 반영했을 때 이전과 같은 방식의 trajectory 기능을 사용하면 너무 느려진다.
   - trajectory 관련 구현인 tail의 내용을 GPU 계산으로 옮겨서 연산 속도를 높이자.
 
 ## Interaction

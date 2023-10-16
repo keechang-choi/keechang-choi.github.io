@@ -84,6 +84,17 @@ plugins:
   - jekyll-paginate
   - jekyll-spaceship
 
+jekyll-spaceship:
+  processors:
+    - table-processor
+    # - mathjax-processor
+    - plantuml-processor
+    - mermaid-processor
+    # - polyfill-processor
+    - media-processor
+    - emoji-processor
+    # - element-processor
+
 # Front Matter Defaults
 defaults:
   # Posts defaults
