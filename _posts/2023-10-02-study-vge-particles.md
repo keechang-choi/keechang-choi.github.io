@@ -18,34 +18,34 @@ compute shader 활용 예제를 base로, 이전에 tutorial에서 작성했던 �
 
 - [Motivation](#motivation)
 - [Prerequisites](#prerequisites)
-  - [numerical integration](#numerical-integration)
-  - [mesh attraction](#mesh-attraction)
+  - [Numerical Integration](#numerical-integration)
+  - [Mesh Attraction](#mesh-attraction)
 - [Plan](#plan)
   - [작업 순서](#작업-순서)
   - [CLI11 and ImGui](#cli11-and-imgui)
 - [Progress](#progress)
-  - [synchronization](#synchronization)
-    - [memory barrier](#memory-barrier)
-  - [particle rendering](#particle-rendering)
-    - [graphics pipeline](#graphics-pipeline)
-  - [particle-calculate-integrate](#particle-calculate-integrate)
-    - [compute pipeline 구성](#compute-pipeline-구성)
-    - [compute shader 구성](#compute-shader-구성)
-    - [specialization Constants](#specialization-constants)
-    - [fix](#fix)
-  - [two-body simulation and verification](#two-body-simulation-and-verification)
-  - [trajectory](#trajectory)
-    - [visualization](#visualization)
-  - [physics and numerical integration](#physics-and-numerical-integration)
-    - [integration method 비교](#integration-method-비교)
-- [mesh attraction](#mesh-attraction-1)
-  - [interaction](#interaction)
-    - [ray-casting](#ray-casting)
-  - [triangle uniform distribution](#triangle-uniform-distribution)
-  - [skinning in compute shader](#skinning-in-compute-shader)
-    - [Recap: mesh and skin](#recap-mesh-and-skin)
-    - [implementation](#implementation)
-  - [trajectory in GPU](#trajectory-in-gpu)
+  - [Synchronization](#synchronization)
+    - [Memory Barrier](#memory-barrier)
+  - [Particle Rendering](#particle-rendering)
+    - [Graphics Pipeline](#graphics-pipeline)
+  - [Particle-Calculate-Integrate](#particle-calculate-integrate)
+    - [Compute Pipeline 구성](#compute-pipeline-구성)
+    - [Compute Shader 구성](#compute-shader-구성)
+    - [Specialization Constants](#specialization-constants)
+    - [Fix](#fix)
+  - [Two-Body Simulation and Verification](#two-body-simulation-and-verification)
+  - [Trajectory](#trajectory)
+    - [Visualization](#visualization)
+  - [Physics and Numerical Integration](#physics-and-numerical-integration)
+    - [Integration Method 비교](#integration-method-비교)
+- [Mesh Attraction](#mesh-attraction-1)
+  - [Interaction](#interaction)
+    - [Ray-Casting](#ray-casting)
+  - [Triangle Uniform Distribution](#triangle-uniform-distribution)
+  - [Skinning in Compute Shader](#skinning-in-compute-shader)
+    - [Recap: Mesh and Skin](#recap-mesh-and-skin)
+    - [Implementation](#implementation)
+  - [Trajectory in GPU](#trajectory-in-gpu)
 - [Demo](#demo)
 - [마무리](#마무리)
 
@@ -67,7 +67,7 @@ compute shader 활용 예제를 base로, 이전에 tutorial에서 작성했던 �
   - [rustracer/crates/examples/gltf_viewer/shaders/AnimationCompute.comp at main · KaminariOS/rustracer (github.com)](https://github.com/KaminariOS/rustracer/blob/main/crates/examples/gltf_viewer/shaders/AnimationCompute.comp)
 
 # Prerequisites
-## numerical integration
+## Numerical Integration
 particle의 움직임을 나타나기 위해 처음 직관적인 접근은 뉴턴 역학을 활용하는 것이다. position을 update 하기 위해서, velocity를 사용하고, velocity를 update하기 위해서 acceleration을 사용하는 방식이다.  
 acceleration은 우리가 지정해준 force에 따라서 계산된다.
 이전까지에는 각각이 미분-적분 관계를 가진다는 기본적인 생각으로 단순하게 시간 간격 dt만 알고 있다면, 적분을 근사해서 원하는 최종 값을 얻을 수 있겠다고 생각했다. (가속도에 dt를 곱해서 속도에 누적시키고, 속도에 dt를 곱해서 위치에 누적시키는 방식)
@@ -101,7 +101,7 @@ error estimation의 order이외에도, 수치 적분의 방식에따라 여러 �
 우선적으로 공부를 할 수는 없을 것 같고, 생각날때 조금씩 알아가야할 것 같아 symplectic function에 대한 개념까지만 공부했다. (integration method가 symplectic한 개념은 아직 자세히 보지 못했다.)  
 어쨌든 해당 내용을 공부하지 않더라도, 검색해서 찾은 방식들대로 integration을 구현하면, 에너지가 보존되는 효과를 누릴수 있다.
 
-## mesh attraction
+## Mesh Attraction
 model의 mesh attraction에도 위의 수치 적분은 동일하게 적용된다. 단지 evalation하는 과정이, n-body simulation에서는 O(n^2) 이지만, mesh attraction에서는 미지 지정한 mesh의 vertice로 attract되도록 지정해주면 된다. (나는 attraction에 공기 저항 처럼 drag에 해당하는 force를 추가해줬다.) 여기서부터는, 물리 simulation이 아니라 특수 효과를 구성한다는 생각으로, 적절한 coefficient 조절을 통해 현실성은 고려하지 않고 보이는 것에만 집중해서 구현할 계획이다.   
 
 한가지 짚고 넘어갈 점은, model의 vertices 뿐만 아니라, 그 면적 자체에도 attraction이 되도록 구현하는 점이다. 이 부분을 복잡하게 생각했었는데, 다른 구현 코드들을 보니 단순히 particle 개수를 추가해서, 남는 particle들을 mesh의 내부 분할 점으로 attract 시키는 방식을 쓰고 있어 나도 그 방식을 채택했다.  
@@ -152,14 +152,14 @@ model의 mesh attraction에도 위의 수치 적분은 동일하게 적용된다
 두 방식을 모두 쓰는 값도 있어서 코드의 일관성이 조금 깨진 측면도 있지만, 앞서 밝힌대로 엄격하지 않게 해당 기능들을 필요시 편하게 사용했다.
 
 # Progress
-## synchronization
+## Synchronization
 
 > [https://vkguide.dev/docs/gpudriven/compute_shaders/#compute-shaders-and-barriers](https://vkguide.dev/docs/gpudriven/compute_shaders/#compute-shaders-and-barriers)  
 
 이전 tutorial에서 compute shader를 다룰때는, fence를 사용해서, compute shader의 계산을 host에서 기다린 후, 다음 단계 (이미지 얻어오고 draw하는 과정)를 진행했다.  
 여기서는 다른 방식으로 synchronization을 구현하는데, pipeline barrier를 사용하는 방식이다. (필요한 이유는 제출된 command들이 submit order로 시작하지만 완료 순서는 모르기 때문)  
 pipeline barrier에 SSBO buffer memory barrier를 사용해서 execution/memory dependency를 구성해준다.
-### memory barrier
+### Memory Barrier
 
 - in a queue
   - 위에서 간단히 설명한 pipeline barrier
@@ -213,7 +213,7 @@ pipeline barrier에 SSBO buffer memory barrier를 사용해서 execution/memory 
     - 위 예시에 해당하는 질문글이고, semaphore 사용과 double buffering 사용시 장점등을 답변하고 있다.
 
 
-## particle rendering
+## Particle Rendering
 
 
 다음은 particle rendering과 shader에 관련된 부분의 진행과정이다.
@@ -227,18 +227,18 @@ pipeline barrier에 SSBO buffer memory barrier를 사용해서 execution/memory 
 | ![image](/images/vge-particle-2.png) |                                                                                additive color blend로 겹친 부분이 흰색에 가깝게 보이도록 빛나는 효과를 의도한 결과이다. <br> color blend로 1, 1, add를 설정해 줬고, alpha blend로 src, dst, add를 설정해줬다.                                                                                |
 
 
-### graphics pipeline
+### Graphics Pipeline
 graphics pipeline은 위처럼 particle rendering으로만 단순하게 구성되어 있다.
 추후에 trajectory를 추가하면서, trajectory pipeline을 추가하게 된다.
 
-## particle-calculate-integrate
+## Particle-Calculate-Integrate
 파이프라인과 그 shader 구성은 크게 `step-2`으로 이뤄진다.  
 - `step-1`에서 differential equation의 evalution을 통해 그 시점에 필요한 값들을 계산한다. (주로 가속도 계산이라고 생각하면 된다.)
 - `step-2`에서는 계산된 값들을 누적시키는 적분을 수행한다. 최종 position도 계산한다.
 
 이 두 단계에서 생성하는 값과 계산에 이용하는 값들은 integration method에 따라 다르다. 그리고 integration method의 stage가 여러개 필요한 경우도 있는데, Runge-Kutta method 같은 경우는 `step-1`을 4번의 stage로 나눠서 계산을 해야 한다. 결국 오차를 줄이는 것과, 계산 비용의 trade-off가 있다고 보면 될 것 같다.  
 Euler method와 symplectic-Euler method를 비교했을 때는, 연산량의 차이가 없어서 사용하지 않을 이유가 없다.
-### compute pipeline 구성
+### Compute Pipeline 구성
 - `step-1`
   - 기본적으로 SSBO는 particle의 position과 velocitity 정보를 저장한다.
   - 이외에 `step-1`에서 계산해야 할 값이 $\frac{dp}{dt}, \; \frac{dv}{dt}$인데, integration method에 따라서 이런 값이 각각 4개씩 까지 늘어난다. 그래서 particle data의 구조는 pos, vel, pk[4], vk[4] 로 구성했다.
@@ -257,7 +257,7 @@ Euler method와 symplectic-Euler method를 비교했을 때는, 연산량의 차
     - 성능상 이점이 있을지는 실험해봐야겠지만, 구현상 복잡도는 더 커진다. `step-1`만 여러번 반복이 필요한 경우가 있어서 `step-2`과 분리해놓는게 편하다.
 - 이 구성은 나중에 추가한 [skinning in compute shader](#skinning-in-compute-shader) 구현 이전까지 유지되고, 이 skinnging을 위한 pipeline은 `step-1` 이전에 추가된다. (`step-1`에서 가속도 계산에 필요하므로)
 
-### compute shader 구성
+### Compute Shader 구성
 
 - `step-1`의 compute shader 구현 [shaders/particle/particle_calculate.comp](https://github.com/keechang-choi/Vulkan-Graphics-Example/blob/main/shaders/particle/particle_calculate.comp)
   - pipeline에서 설명한대로, 모든 particle pair로 발생하는 attraction의 가속도 계산의 $O(n^2)$ 의 과정이 구현되어 있다.
@@ -317,7 +317,7 @@ Euler method와 symplectic-Euler method를 비교했을 때는, 연산량의 차
 | ![image](/images/vge-particle-6.png) | ![image](/images/vge-particle-7.png) |
 | ![image](/images/vge-particle-8.png) | ![image](/images/vge-particle-9.png) |
 
-### specialization Constants
+### Specialization Constants
 이 값들은 상수 역할을 할 수 있지만, compile이후에 특정되는 값들이다.
 
 vulkan-hpp의 wrapper들을 쓰면 다음과 같은 방식으로 사용이 가능하다.
@@ -346,7 +346,7 @@ vulkan-hpp의 wrapper들을 쓰면 다음과 같은 방식으로 사용이 가�
 a는 type이 고정되어 있기 때문에 implicit constructor 사용이 문제 없지만, c는 type T에대한 deduction이 필요해서 implicit conversion이 고려되지 않아 compile이 불가능하다.  
 [Template argument deduction - cppreference.com](https://en.cppreference.com/w/cpp/language/template_argument_deduction#Non-deduced_contexts)
 
-### fix
+### Fix
 기존 원본 예제에서는 particle 수가 workgruop size의 배수가 아닐때 실행이 안되던 문제들이 있었다. 이에대해 수정한 내용들이다.
 - dispatch 시, 0이 들어가지 않도록 전체 `numParticles`를 workGroupSize로 나눈 후 +1을 해준다.
 - SHARED_DATA_SIZE와 workGroupSize가 같도록 수정해줬다.
@@ -355,7 +355,7 @@ a는 type이 고정되어 있기 때문에 implicit constructor 사용이 문제
   - [rtr_rep_2014_ComputeShader.pdf (tuwien.ac.at)](https://www.cg.tuwien.ac.at/courses/Realtime/repetitorium/VU.WS.2014/rtr_rep_2014_ComputeShader.pdf)
 
 
-## two-body simulation and verification
+## Two-Body Simulation and Verification
 이제 눈에 보이는 simulation 결과를 얻게되었다. 그래서 이 결과가 의도대로 동작하는지 점검하고 다음 과정으로 진행해고자 했다.  
 - 다음과 같이 다른 simulation 자료와 비교하면서 확인을 했다.
   - [https://evgenii.com/blog/two-body-problem-simulator/](https://evgenii.com/blog/two-body-problem-simulator/)
@@ -367,7 +367,7 @@ a는 type이 고정되어 있기 때문에 implicit constructor 사용이 문제
 
 
 
-## trajectory
+## Trajectory
 
 - 첫 구현은 가장 naive 한 접근을 사용했다
   - 각 particle 마다 tail이라는 queue 형태로 position을 CPU에서 저장해놓고, 이를 다시 GPU의 tail draw shader로 넘겨주는 방식이다.
@@ -392,7 +392,7 @@ a는 type이 고정되어 있기 때문에 implicit constructor 사용이 문제
 | ![image](/images/vge-particle-12.png) | trajectory를 올바르게 그린 후에 확인한 첫번째 오류인데, 궤도의 첫 부분의 오차가 유난히 큰 문제가 있었다. <br> simulation 속도를 엄청 느리게 할 때는 이런 오류가 나타나지 않아 delta time과 관련된 오차 부분을 살펴봤다. 원인은 frameTimer의 값이 1.0으로 초기화 되어 있어서 발생한 integration error였고, 단순히 0으로 바꾸면서 해결됐다. |
 | ![image](/images/vge-particle-13.png) | 최종적으로 two-particle에 대해 예상한 것과 동일한 궤도를 확인하면서 검증을 마쳤다.  |
 
-### visualization
+### Visualization
 시각적인 효과를 위해, tail의 alpha 값을 오래된 것 일수록 작아지도록 설정했다. 이 alpha 계산도 처음에는 CPU 측에서 해주다가, 이후에는 tail vertex의 head index와 차이값을 통해 shader에서 draw 직전에 계산하도록 옮겨주었다.
 
 또한, tail로 사용할 vertex 수와, tail을 sampling 할 시간 간격 등을 지정해줄 수 있도록 option으로 추가했다.  
@@ -406,11 +406,11 @@ a는 type이 고정되어 있기 때문에 implicit constructor 사용이 문제
 
 
 
-## physics and numerical integration
+## Physics and Numerical Integration
 two-body simulation 결과를 가지고, integration method를 바꿔보면서 실험을 진행했다.  
 이를 위해 옵션 설정도 늘리고, 거리나 energy 등의 값도 plot 하도록 imGui 기능들을 추가했다.  
 
-### integration method 비교
+### Integration Method 비교
 - 같은 시간 간겨에서 error estimation order가 높은 방식을 사용할수록 오차가 줄어드는 것을 확인했다.
 - 같은 order라면, symplectic 방식이 장기적으로 더 안정적인 결과를 준다.
 - 비교를 위해 시간간격 기준을 여러번 바꿔가면서 각 방식들을 실행해봤는데, 상대적으로 큰 시간간격을 사용하면 갑자기 큰 오차가 나올때도 있고, 상대적으로 작은 시간간격을 사용하면 차이가 나타나지 않을때도 있었다.
@@ -434,7 +434,7 @@ two-body simulation 결과를 가지고, integration method를 바꿔보면서 �
 
 
 
-# mesh attraction
+# Mesh Attraction
 ![image](/images/vge-particle-47.png) 
 
 위의 이미지는 이전부터 사용하던 사과 model로 particle들을 위치시킨 것이다.  
@@ -453,8 +453,9 @@ two-body simulation 결과를 가지고, integration method를 바꿔보면서 �
   - $O(n^2)$ 연산이 필요 없으므로 vertex수가 이전보다 훨씬 많을 수 있는데, 이를 반영했을 때 이전과 같은 방식의 trajectory 기능을 사용하면 너무 느려진다.
   - trajectory 관련 구현인 tail의 내용을 GPU 계산으로 옮겨서 연산 속도를 높이자.
 
-## interaction
-![image](/images/vge-particle-model.gif)
+## Interaction
+![image](/images/vge-particle-model.gif)  
+
 크게 두 가지 interaction을 추가했다.
 - imGui option에서 model 변경
   - 모델은 모두 시작 시 load 해 놓고, option에서 선택한 model instance를 bind하는 기능만 추가하면 된다.
@@ -465,7 +466,7 @@ two-body simulation 결과를 가지고, integration method를 바꿔보면서 �
   - right: 해당 position의 반대 방향으로 밀려나가도록 구현
   - middle: vertices들이 초기위치로 이동하도록 구현
   
-### ray-casting
+### Ray-Casting
 mouse left와 right 기능을 위해서는 click된 위치를 world space로 mapping 해줘야 한다.
 
 개념적인 부분은 해당 [opengl-tutorial](http://www.opengl-tutorial.org/miscellaneous/clicking-on-objects/picking-with-a-physics-library/)을 참고했다.  
@@ -479,7 +480,7 @@ mouse left와 right 기능을 위해서는 click된 위치를 world space로 map
 - compute shader에서 이 `clickData`를 사용해 지정된 attraction/repulsion 을 가속도에 반영한다.
 
 
-## triangle uniform distribution
+## Triangle Uniform Distribution
 
 ![image](/images/vge-particle-29.png)  
 
@@ -523,8 +524,8 @@ mouse left와 right 기능을 위해서는 click된 위치를 world space로 map
 |![image](/images/vge-particle-33.png)  | ![image](/images/vge-particle-34.png) | ![image](/images/vge-particle-35.png) |
 
 
-## skinning in compute shader
-### Recap: mesh and skin
+## Skinning in Compute Shader
+### Recap: Mesh and Skin
 [이전 example-pipelines](/_posts/2023-07-24-study-vge-pipelines.md#glTF)  
 
 [이전 example-animation](/_posts/2023-08-11-study-vge-animation.md#개념)  
@@ -538,7 +539,7 @@ mouse left와 right 기능을 위해서는 click된 위치를 world space로 map
   - mesh가 여러 node에 나눠져 있고, skin 없이 node hierarchy만 사용하는 모델에 대한 구현은 아직 미구현이다.
 - animation update는 CPU에서 joint node의 matrix를 변경해준다.
 
-### implementation
+### Implementation
 이전 구현 상태에서 변경해줄 사항들이다.
 - glTF 모듈의 vertex/index buffer를 shader storage usage도 가능하게 한다.
   - 이 값은 여러 animation 상태에 따라서 입력으로 재사용되어야 한다. 이를위해 glTF model class에서 descriptorSet bind 기능을 외부로 노출해야 한다.
@@ -585,14 +586,15 @@ mouse left와 right 기능을 위해서는 click된 위치를 world space로 map
     - model attraction without skinning
 
 
-|  |  |  |
-| :---: | :---: | :---: |
-| ![image](/images/vge-particle-38.png) | ![image](/images/vge-particle-39.png) | ![image](/images/vge-particle-40.png) |
-| ![image](/images/vge-particle-41.png) | ![image](/images/vge-particle-42.png) | ![image](/images/vge-particle-43.png) |
+| fox | ship |
+| :---: | :---: |
+| ![image](/images/vge-particle-38.png) |  ![image](/images/vge-particle-41.png) |
+| ![image](/images/vge-particle-39.png) |  ![image](/images/vge-particle-42.png)  |
+| ![image](/images/vge-particle-40.png) |  ![image](/images/vge-particle-43.png) |
 
 
 
-## trajectory in GPU
+## Trajectory in GPU
 particle 수를 늘려서 실행했을 때, fps가 매우 낮아지는 경우를 확인했다. 그리고 최대 particle 수에서는 tail길이 만큼 그 buffer 크기가 배로 커지기 때문에 너무 큰 크기로 인해 buffer 할당이 실패하는 경우도 있었다.  
 
 우선 적당한 particle 수에서 적당한 tail 길이에서의 성능을 높이기 위해, GPU로 해당 계산을 옮겨 tail 계산과 memory transfer 비용을 줄이기로 했다.
