@@ -19,6 +19,7 @@ skin: "/assets/css/skins/default.css"
 locale: en-US
 title: "KC blog"
 description: "일상 및 공부 기록"
+repository: keechang-choi/keechang-choi.github.io
 baseurl: # the subpath of your site, e.g. "/blog"
 url: # the base hostname & protocol for your site e.g. "https://mmistakes.github.io"
 logo: # path of site logo, e.g. "/images/logo.png"
