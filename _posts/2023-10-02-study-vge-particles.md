@@ -44,6 +44,7 @@ compute shader 활용 예제를 base로, 이전에 tutorial에서 작성했던 �
   - [triangle uniform distribution](#triangle-uniform-distribution)
   - [skinning in compute shader](#skinning-in-compute-shader)
     - [Recap: mesh and skin](#recap-mesh-and-skin)
+    - [implementation](#implementation)
   - [trajectory in GPU](#trajectory-in-gpu)
 - [Demo](#demo)
 - [마무리](#마무리)
@@ -524,32 +525,122 @@ mouse left와 right 기능을 위해서는 click된 위치를 world space로 map
 
 ## skinning in compute shader
 ### Recap: mesh and skin
+[이전 example-pipelines](/_posts/2023-07-24-study-vge-pipelines.md#glTF)  
+
+[이전 example-animation](/_posts/2023-08-11-study-vge-animation.md#개념)  
+
+- node가 mesh를 소유하고, skin을 참조한다.
+  - mesh의 primitives에 vertex, joint index, weight 등의 정보가 들어있고, 실제 데이터는 vertex buffer에 들어있다.
+  - skin은 여러 joint node를 참조한다.
+- skinning의 정보가 mesh UBO에 들어있다.
+  - 기존의 구조는 node 단위로 bind 하고 draw하기에 가능한 구조.
+  - node가 skinned mesh를 가지는 경우는 skinIndex값이 해당되는 skin의 index를 가르키고, 아닌 경우는 -1 값이다.
+  - mesh가 여러 node에 나눠져 있고, skin 없이 node hierarchy만 사용하는 모델에 대한 구현은 아직 미구현이다.
+- animation update는 CPU에서 joint node의 matrix를 변경해준다.
+
+### implementation
+이전 구현 상태에서 변경해줄 사항들이다.
+- glTF 모듈의 vertex/index buffer를 shader storage usage도 가능하게 한다.
+  - 이 값은 여러 animation 상태에 따라서 입력으로 재사용되어야 한다. 이를위해 glTF model class에서 descriptorSet bind 기능을 외부로 노출해야 한다.
+  - 그리고 이 vertex가 어떤 skin을 사용하는지에 대한 정보는 compute shader에서 알 수 없으므로, attribute에 skinIndex를 추가해준다.
+  - 또한 이 buffer 외에, out `animatedVertexBuffer`와 그에따른 descriptorSet이 필요하고, frames-in-flight를 고려해서 자원을 할당해야 한다.
+- node 단위의 joint matrices UBO정보를 한번에 bind할 수 있어야한다.
+  - compute shader에서 skinning을 계산하기 위해서는, node 단위로 draw하지 않고, work group size로 dispatch한 결과를 `animatedVertexBuffer`에 저장해야하기 때문이다.
+  - glTF model class에서 이 모든 skin의 jointMatrices data를 외부로 반환하는 기능을 추가해야 한다.
+  - 그리고 이 data는 `skinMatricesBuffers`와 `skinDescriptorSet`를 통해 SSBO로 binding 되어야 한다.
+- 구현 과정에서, memory layout 관련 오류가 발생해서 정리하면서 참고했던 내용이다.
+  - [std140 usage](https://stackoverflow.com/questions/16270846/when-should-i-use-std140-in-opengl)
+  - [glsl memory layout](https://www.khronos.org/opengl/wiki/Interface_Block_(GLSL)#Memory_layout)
+- 계획
+  - model vertex attribute에 skinIndex 추가 및 저장
+    - 구현할 때는 따로 추가하지 않고, position의 w 값을 이용했다.
+  - vertex의 descriptorSet 추가
+    - 기존 vertex buffer는 그대로 사용하고 usage만 추가하면됨
+    - read only로 사용할 것이므로, 기존 자원 구조 변경이 필요없음
+  - mesh face attraction
+    - 이 부분은 미리 고려해서 구현했기 때문에 추가할 내용은 없음.
+  - skin SSBO 생성
+    - animation update를 매 frame하는 경우, 이 skin SSBO도 매 frame update 되어야하므로, frames-in-flight 수 만큼 생성한다.
+    - 이 SSBO에는 모든 model instance의 모든 skinMatricesData가 저장된다.
+    - 주기적인 update가 필요하고, 크기가 비교적 크지 않으므로, host-coherent한 타입의 buffer로 생성했다.
+  - animated vertex buffer 생성
+    - 위 skin SSBO와 같은 이유로 같은 크기로 생성한다.
+    - 각 model instance의 vertexCount 만큼의 크기가 되도록 생성하고, type은 GPU dedicated로 생성한다.
+    - animated vertex data에는 pos, normal, tangent attribute가 모두 고려되어야 한다.
+  - compute shader에 필요한 데이터 binding
+    - model vertices는 model class에서 구현한 bind 함수를 사용해서 bind한다.
+    - skin SSBO와 animated vertexs SSBO는 하나의 set에 다른 binding으로 지정해서 bind한다.
+  - compute shader 구현
+    - 기존 vertex shader에서 하던 skinning 계산을 compute shader로 작성한다.
+    - skinIndex가 -1인 경우는 아무런 연산을 하지 않는다.
+  - pipeline 구성 및 command buffer recording
+    - 기존 compute pipeline들과 유사한 방식으로 생성하고, `step-1` 이전에 recording 하고 실행이 완료되도록 pipeline barrier도 설정해준다.
+  - animation 관련 내용 추가.
+    - fox model의 세가지 animation을 모두 사용할 instance를 생성해서 확인한다.
+    - 더 많은 vertex를 가진 ship model을 추가해서 회전하는 external animation을 하도록 추가했다.
+    - particle 수를 늘려서 테스트한다.
+      - 2^20 까지로 늘려서 확인.
+  - 이번 변경으로 인해 이전에 작업해둔 내용들의 실행도 문제 없는지 확인한다.
+    - n-body simulation
+    - model attraction without skinning
 
 
-![image](/images/vge-particle-38.png)  
-![image](/images/vge-particle-39.png)  
-![image](/images/vge-particle-40.png)  
-![image](/images/vge-particle-41.png)  
-![image](/images/vge-particle-42.png)  
-![image](/images/vge-particle-43.png)  
-![image](/images/vge-particle-44.png)  
+|  |  |  |
+| :---: | :---: | :---: |
+| ![image](/images/vge-particle-38.png) | ![image](/images/vge-particle-39.png) | ![image](/images/vge-particle-40.png) |
+| ![image](/images/vge-particle-41.png) | ![image](/images/vge-particle-42.png) | ![image](/images/vge-particle-43.png) |
+
+
 
 ## trajectory in GPU
-![image](/images/vge-particle-19.png)  
+particle 수를 늘려서 실행했을 때, fps가 매우 낮아지는 경우를 확인했다. 그리고 최대 particle 수에서는 tail길이 만큼 그 buffer 크기가 배로 커지기 때문에 너무 큰 크기로 인해 buffer 할당이 실패하는 경우도 있었다.  
 
-![image](/images/vge-particle-21.png)  
-![image](/images/vge-particle-22.png)  
+우선 적당한 particle 수에서 적당한 tail 길이에서의 성능을 높이기 위해, GPU로 해당 계산을 옮겨 tail 계산과 memory transfer 비용을 줄이기로 했다.
 
-![image](/images/vge-particle-45.png)  
-![image](/images/vge-particle-46.png)  
+여러 방식을 고민해봤는데, 구현하기 간단한 방식을 채택했다.
+- tail buffer data에는 `numParticles` * `tailSize` 만큼의 vec4가 들어간다. (position + w값 color)
+- tail buffer는 frames-in-flight 수 만큼으로 생성한다.
+  - compute shader에서 변경하고, rendering에 사용되므로 중복된 자원이 필요하다고 봤다.
+- `step-2` 의 integrate이 완료된 후, 계산된 새로운 particle의 position을 tail SSBO의 해당 particle index 값들 중 첫번째에 위치시켜 준다.
+  - 이전에 있던 값들은 한칸씩 뒤로 밀어주고 마지막 값은 버려지게한다.
+  - update할 주기가 아니라면, 아무것도 하지 않아도 된다.
+- 이때 frames-in-flight를 고려하면 이전 frame의 tail buffer도 같이 bind 해줘야 하므로(particle SSBO에서 `preFrameIndex`를 쓴 것 처럼) 비효율적인 부분이 발생한다.
+  - update하지 않아도 될 경우에도, 이전 frame의 tail buffer 값들을 전부 복사해줘야 한다. 
+    - 구현 전부터 염두하던 부분인데, tailSize 만큼의 iteration이 각 particle 마다 추가되지만, particle에 대한 계산이 compute shader에서 병렬적으로 이뤄지므로 실험해볼만 하다고 생각했다.
+    - 그리고 buffer 크기 한계로 인해 particle 수가 많은 경우에는 어차피 큰 tailSize를 사용할 수 없어서 성능이 치명적인 경우로 실행시키지는 않을 것 같았다.
+  - 이 과정을 개선시키기 위한 구조를 구상해봤는데, 구현이 복잡해지기도 하고, 이 상태로도 이미 원하는 수준의 성능 개선이 가능해서 더이상 최적화 하지 않았다.
+- queue family ownership transfer 관련 처리는 이전과 동일하게 해줘야한다. (compute queue와 graphics queue 모두에서 사용되는 SSBO이므로)
+
+ 
+| <div style="width:300px">image</div> | explanation |
+| :---: | :--- |
+| ![image](/images/vge-particle-19.png) | `tailTimer`값을 증가시키면서 `tailSampleTime` 값을 초과하면 0.0으로 reset 시켜주고, 이 값을 UBO로 shader에 전달해, 0.0이면 tail update를 수행하는 구조로 구현했다.  <br> 초기 구현에서는 이 0.0으로 reset을 하는 코드가 `frameTimer`만큼 increment하는 코드보다 위에 있어서 shader로 전달된 값이 0.0이 되지 않았고 tail update가 되지 않으면서 undefined 된 값이 들어가는 문제가 있었다. |
+| ![image](/images/vge-particle-21.png) | ^^ |
+
+
+구현된 tail 기능을 활용해 기존 trajectory rendering이 가능했던 것 보다 더 많은 수의 particle과 긴 trajectory도 좋은 성능으로 나타낼 수 있게 됐다. 이후에 tail 관련 alpha값과, fadeout 정도, 선 width 등 수치도 수정할 수 있도록 추가해줬다.  
+
+|  |  |
+| :---: | :---: | 
+| ![image](/images/vge-particle-22.png) | ![image](/images/vge-particle-46.png) |
+| ![image](/images/vge-particle-44.png) | ![image](/images/vge-particle-45.png) |
+
+
 # Demo
  
-  
+animation의 속도가 너무 느리면, particle이 이동하기 전에 target 위치가 바뀌면서 예상된 animation을 알아보기 힘든 경우가 나올 수도 있다. 관련 설정 수치들 모두 imGui 패널에서 수정가능하도록 구현되어 있다.  
+
 ![image](/images/vge-particle-animation.gif)  
 
 
 # 마무리
 
-PBD
+이번 compute shader 예제 작성을 하며 지난 tutorial과 이전 예제 작성에서 다뤘던 내용들이 대부분 다시 쓰였다. 그래서 애매했던 개념들은 다시 정리하면서 보충할 수 있었다. 특히 GPU memory 구조나 compute shader에서 쓰이는 기능들을 좀 더 알게되었는데, 이전 tutorial의 간단한 compute shader 구현에서는 지나쳤던 내용들을 많이 보충할 수 있었다.
+
+예제에 여러기능을 추가하면서 테스트하고, 계획을 수정하다 보니 시간소요가 되는 구간들이 있었다. 처음 구조 계획을 할 때와 어느정도 기능을 구현 후 덧붙여 나가는 과정에서 좀 개발 속도가 느려진 감이 있었고, 중간에 계획한 내용들을 구현하고 조사 및 공부를 하는 과정에서는 루즈해지지 않았던 것 같다. numerical integrator 관련 이론을 공부 할 때 필요한 것 보다 더 많은 내용을 보게 되기도 했는데, 오히려 시간은 오래 걸리지 않았었다. 앞으로 필요할 때 다시 공부를 재개한다면 분명 도움이 될 것 같다.
+
+이 예제 작성 완료 후 미뤄져 있던 blog 글들을 많이 쓰게 됐는데, 주로 공부나 tutorial을 따라서 연습했을 때는 게재할만한 내용이 적다는 생각이 들어서였던 것 같다. 시간이 좀 지나서 글을 쓰니 처음 기록했던 내용들이 기억에서 조금 잊혀졌을 때 다시 복습하는 느낌이 들었던 것은 좋았지만, 글을 정리하거나 여기저기 흩어진 사진이나 자료들을 모으는 시간은 더 들긴 했다.
+
+이후에는 PBD와 관련된 내용의 예제를 만들어 볼 생각인데, 진행상황 기록을 좀 더 작은 단위로 나눠서 해도 좋겠다는 생각이 들었다. 
 
 
