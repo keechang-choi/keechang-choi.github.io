@@ -35,14 +35,13 @@ compute shader 활용 예제를 base로, 이전에 tutorial에서 작성했던 �
     - [fix](#fix)
   - [two-body simulation and verification](#two-body-simulation-and-verification)
   - [trajectory](#trajectory)
-    - [line drawing](#line-drawing)
+    - [visualization](#visualization)
   - [physics and numerical integration](#physics-and-numerical-integration)
     - [integration method 비교](#integration-method-비교)
 - [mesh attraction](#mesh-attraction-1)
   - [interaction](#interaction)
     - [ray-casting](#ray-casting)
   - [triangle uniform distribution](#triangle-uniform-distribution)
-    - [work group size](#work-group-size)
   - [skinning in compute shader](#skinning-in-compute-shader)
     - [Recap: mesh and skin](#recap-mesh-and-skin)
   - [trajectory in GPU](#trajectory-in-gpu)
@@ -220,8 +219,8 @@ pipeline barrier에 SSBO buffer memory barrier를 사용해서 execution/memory 
 - vertex shader 구현 [shaders/particle/particle.vert](https://github.com/keechang-choi/Vulkan-Graphics-Example/blob/main/shaders/particle/particle.vert)
 - fragment shader 구현 [shaders/particle/particle.frag](https://github.com/keechang-choi/Vulkan-Graphics-Example/blob/main/shaders/particle/particle.frag)
 
-|                image                 |                                                                                                                                                                 explanation                                                                                                                                                                  |
-| :----------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| image | explanation |
+| :---: | :--- |
 | ![image](/images/vge-particle-0.png) | particle은 계산된 position과 `gl_PointSize` 를 이용해서, fragment shader에서 원 형태의 sprite가 되도록 표현했다. alpha값을 조절해서 중앙이 더 진하게 보이도록 설정했다. <br> 원 주변의 사각형이 겹친 부분은 depth가 제대로 구현되지 않았는데, transparent 관련 구현 대신 depthTestEnable을 끄고 pipeline state를 생성하는 방식으로 해결했다. |
 | ![image](/images/vge-particle-1.png) |                                                              원형의 sprite와 alpha 값 조절은 잘 표현되었지만, depthTest가 꺼졌기 때문에, 더 뒤에 있어야 할 파란 점들이 초록 점들을 뚫고 보이는 현상이다. 이를 제거하기 위해 additive color blend 방식으로 보여지도록 설정했다.                                                               |
 | ![image](/images/vge-particle-2.png) |                                                                                additive color blend로 겹친 부분이 흰색에 가깝게 보이도록 빛나는 효과를 의도한 결과이다. <br> color blend로 1, 1, add를 설정해 줬고, alpha blend로 src, dst, add를 설정해줬다.                                                                                |
@@ -266,8 +265,8 @@ Euler method와 symplectic-Euler method를 비교했을 때는, 연산량의 차
   - UBO로 전달되는 값들 중 사용하는 값은 다음과 같다.
     - dt: frame 사이에 시간이 얼마나 흘렀는지를 측정한 값으로 delta timing에 사용됨
     - particleCount: particle 수 보다 많은 invocation이 이뤄질 경우에 대한 처리
-      - 예를들어, local workgroup dimension이 (256,1,1)이라고 하면, $floor(numParticles/256)+1 $ 만큼의 local workgroup들이 `vkCmdDispatch()`에 의해 실행될 것이다.
-      - 이때 numParticles가 256의 배수가 아닐때는, 항상 `gl_GlocalInvocationID`가 numParticles보다 큰 invocation이 실행될 것인데, 이런 경우를 걸러주기 위해서 필요하다.
+      - 예를들어, local workgroup dimension이 (256,1,1)이라고 하면, $ floor(numParticles/256)+1 $ 만큼의 local workgroup들이 `vkCmdDispatch()`에 의해 실행될 것이다.
+      - 이때 numParticles가 256의 배수가 아닐때는, 항상 [`gl_GlocalInvocationID`](https://registry.khronos.org/OpenGL-Refpages/gl4/html/gl_GlobalInvocationID.xhtml)가 numParticles보다 큰 invocation이 실행될 것인데, 이런 경우를 걸러주기 위해서 필요하다.
     - gravity coefficient: 중력상수 역할의 계수
     - power coefficient: 거리 제곱의 값에 취할 지수. 구현 상 1.5 값으로 지정하면 실제 inverse square law에 해당한다.
     - soften coefficient 이다. 
@@ -279,14 +278,30 @@ Euler method와 symplectic-Euler method를 비교했을 때는, 연산량의 차
     - local_size_x_id: local workgroup의 dimension
       - 상수로 지정이 되어야하기 때문에 고정된 값을 사용하던 기존 구조에서 pipeline 생성시 전달해주도록 수정했다.
   - 구조 설명
+    - [`gl_GlobalInvocationID`.x]를 index로 써서 이 particle 하나에 대한 계산을 하나의 invocation에서 수행한다.
     - 한 particle의 가속도 계산에서 모든 particle의 위치가 필요하므로 loop가 필요하다. 단순히 0~ubo.particleCount-1 의 loop를 돌지 않고, 두 index i, j와 sharedData를 사용한다.
     - i는 0부터 SHARED_DATA_SIZE 만큼 증가시키며 iteration
-    - 
+      - [i+`gl_LocalInvocationID`.x] index의 particle의 입력값(position 혹은 `step-1`의 이전 stage에서 계산된 결과인 `pk[4]`의 값들) 을 sharedData[`gl_LocalInvocationID`.x]에 저장한다.
+        - [gl_LocalInvocationID.x](https://registry.khronos.org/OpenGL-Refpages/gl4/html/gl_LocalInvocationID.xhtml) 는 같은 work group에서의 각 invocation index이다. $\in [0, \text{gl_WorkGroupSize.x}-1]$
+        - 이 particleCount를 넘어가면 사용하지 않을 목적으로 입력정보 대신 0을 넣어놓는다. (이 사용하지 않을 값이 divide by zero 등의 계산상 문제를 일으키지 않을지 주의)
+      - synchronization
+        - momory control
+          - [`memoryBarrierShared()`](https://registry.khronos.org/OpenGL-Refpages/gl4/html/memoryBarrierShared.xhtml) 호출
+          - invocation이 thread에 해당하는 실행 단위이므로 한 thread에서 shared variable의 변경후, 다음 접근에서 visible하도록 기다린다. 
+        - invocation control
+          - [`barrier()`](https://registry.khronos.org/OpenGL-Refpages/gl4/html/barrier.xhtml) 호출
+          - 같은 work group의 모든 invocation이 모두 이 함수 호출 지점에 도달하도록 기다린 후 재개된다.
+      - 이제 j를 0부터 `gl_WorkGroupSize.x`-1 까지 iteration.
+        - `shardData[j]` 의 값을 other particle의 입력값으로 사용해서 대상 index의 particle의 가속도 정보에 누적해준다.
+      - `barrier()` 호출을 통해, 다음 i값의 `shardData` 업데이트를 하기 전에 사용이 끝날때까지 기다린다.(`memoryBarrierShared()` 호출은 불필요해 보여서 하지 않음.)
+    - i값을 `SHARED_DATA_SIZE` 만큼 증가시켜서 반복
+  - 이 iteration이 끝나면, 대상 index의 particle에 영향을 주는 다른 모든 particle에 대한 가속도 계산이 끝나게 된다. (같은 workgroup내의 index의 particle들도 계산이 같은 시점에 끝났을 것이다.)
+  - 이제 그 대상 particle의 `pk[4]`와 `vk[4]`에 필요한 정보의 형태로 계산해서 `step-1`의 다음 stage 혹은 `step-2`로 넘어가면 된다.
 - `step-2`의 compute shader 구현 [shaders/particle/particle_integrate.comp](https://github.com/keechang-choi/Vulkan-Graphics-Example/blob/main/shaders/particle/particle_integrate.comp)
-- 
-gl_GlobalInvocationID
+  - 여기서도 `gl_GlobalInvocationID.x` 의 값을 index로 사용할텐데, 차이점으로 먼저 particleCount와 비교하여 같거나 크면, `return;`을 통해 미리 계산을 종료해도 된다. (`step-1`에서는 `barrier()` 사용에 유의해야 한다.)
+  - 그 후 내용은 간단하다, 넘어온 정보들을 활용해서 INTEGRATOR type에 따라 다른 방식으로 particle의 pos와 vel을 업데이트해준다.
+- 업데이트가 완료된 pos값은, 이전에 작성해둔 graphics pipeline으로 넘어가서 particle rendering 부분에서 사용된다. 구현된 실행 결과들은 다음과 같다.
 
-gl_LocalInvocationID
 
 |                                      |                                         |                                      |
 | :----------------------------------: | :-------------------------------------: | :----------------------------------: |
@@ -302,76 +317,215 @@ gl_LocalInvocationID
 | ![image](/images/vge-particle-8.png) | ![image](/images/vge-particle-9.png) |
 
 ### specialization Constants
+이 값들은 상수 역할을 할 수 있지만, compile이후에 특정되는 값들이다.
 
+vulkan-hpp의 wrapper들을 쓰면 다음과 같은 방식으로 사용이 가능하다.
 
+```c++
+    std::vector<vk::SpecializationMapEntry> specializationMapEntries;
+    specializationMapEntries.emplace_back(
+        0u, offsetof(SpecializationData, sharedDataSize), sizeof(uint32_t));
+    specializationMapEntries.emplace_back(
+        1u, offsetof(SpecializationData, gravity), sizeof(float));
+    specializationMapEntries.emplace_back(
+        2u, offsetof(SpecializationData, power), sizeof(float));
+    specializationMapEntries.emplace_back(
+        3u, offsetof(SpecializationData, soften), sizeof(float));
+
+    vk::ArrayProxyNoTemporaries<vk::SpecializationMapEntry> a(
+        specializationMapEntries);
+    vk::ArrayProxyNoTemporaries<const SpecializationData> b(specializationData);
+    std::array<const SpecializationData, 1> c = {specializationData};
+
+    vk::SpecializationInfo specializationInfo(a, b);
+```
+문법상 주의할 부분이 있는데, (a,c)로는 `SpecializationInfo`를 생성할수가 없다. compile자체가 안되는데, 다른 클래스 생성에서는 쓰던 부분이라 헷갈리는 부분이었다. 예시로 다음 사이트에서 compile해볼 수 있다. [https://godbolt.org/z/v69sG4sbK](https://godbolt.org/z/v69sG4sbK)  
+
+위의 compile 문제는 template argument deduction과 관련있는데, deduction 시 implicit conversion이 고려되지 않기 때문이다.  
+a는 type이 고정되어 있기 때문에 implicit constructor 사용이 문제 없지만, c는 type T에대한 deduction이 필요해서 implicit conversion이 고려되지 않아 compile이 불가능하다.  
 [Template argument deduction - cppreference.com](https://en.cppreference.com/w/cpp/language/template_argument_deduction#Non-deduced_contexts)
 
 ### fix
-shader numParticles
-
-[https://registry.khronos.org/OpenGL-Refpages/gl4/html/barrier.xhtml](https://registry.khronos.org/OpenGL-Refpages/gl4/html/barrier.xhtml)
-
-
-[https://registry.khronos.org/OpenGL-Refpages/gl4/html/memoryBarrier.xhtml](https://registry.khronos.org/OpenGL-Refpages/gl4/html/memoryBarrier.xhtml)
+기존 원본 예제에서는 particle 수가 workgruop size의 배수가 아닐때 실행이 안되던 문제들이 있었다. 이에대해 수정한 내용들이다.
+- dispatch 시, 0이 들어가지 않도록 전체 `numParticles`를 workGroupSize로 나눈 후 +1을 해준다.
+- SHARED_DATA_SIZE와 workGroupSize가 같도록 수정해줬다.
+  - 원본 예제에서는 다른 값이 사용될 수도 있는데, 그 경우 shader에서 index 문제가 발생하거나, 일부 particle-particle pair가 계산에 사용되지 않을 수 있다. (계산량을 줄이기 위해 의도된 것인지는 모르겠다.)
+- 수정 하던 과정에서 [`barrier()`](https://registry.khronos.org/OpenGL-Refpages/gl4/html/barrier.xhtml) 사용과 compute shader 개념에 부족한 부분이 있어서 computation이 멈추거나 하는 문제가 있었는데, 다음 자료를 참고했다.
+  - [rtr_rep_2014_ComputeShader.pdf (tuwien.ac.at)](https://www.cg.tuwien.ac.at/courses/Realtime/repetitorium/VU.WS.2014/rtr_rep_2014_ComputeShader.pdf)
 
 
 ## two-body simulation and verification
-[https://evgenii.com/blog/two-body-problem-simulator/](https://evgenii.com/blog/two-body-problem-simulator/)
+이제 눈에 보이는 simulation 결과를 얻게되었다. 그래서 이 결과가 의도대로 동작하는지 점검하고 다음 과정으로 진행해고자 했다.  
+- 다음과 같이 다른 simulation 자료와 비교하면서 확인을 했다.
+  - [https://evgenii.com/blog/two-body-problem-simulator/](https://evgenii.com/blog/two-body-problem-simulator/)
+- 다음 처럼 간단한 경우인 2-particle이 원운동을 하도록 수치를 조정해서 실행했다.
+  - ```
+    .\particle.exe --np 2 --na 2 -g 0.01 --rv 30 -p 1.5 -s 0.001
+    ```
+-  particle의 trajectory가 남지 않으니 결과를 확인하기 어려웠고, 정확한 물리량을 출력하는 것도 필요해보여 이 기능들을 먼저 추가하기로 했다.
 
 
-![image](/images/vge-particle-10.png)  
-![image](/images/vge-particle-11.png)  
-![image](/images/vge-particle-12.png)  
-![image](/images/vge-particle-13.png)  
 
 ## trajectory
-![image](/images/vge-particle-14.png)  
-![image](/images/vge-particle-15.png)  
-![image](/images/vge-particle-16.png)  
-![image](/images/vge-particle-17.png)  
-![image](/images/vge-particle-18.png)  
 
-### line drawing
-![image](/images/vge-particle-20.png)  
+- 첫 구현은 가장 naive 한 접근을 사용했다
+  - 각 particle 마다 tail이라는 queue 형태로 position을 CPU에서 저장해놓고, 이를 다시 GPU의 tail draw shader로 넘겨주는 방식이다.
+  - 이때는 draw도 각 particle 수만큼 호출해줬다.
+  - [commits](https://github.com/keechang-choi/Vulkan-Graphics-Example/pull/4/commits/d0bc6b407e79fdacc48842d1acb1ac6fd186da80)
+  - [commits](https://github.com/keechang-choi/Vulkan-Graphics-Example/pull/4/commits/d465deef616374b260d36e6ae21fdb2af33f594b)
+- 이후 한번의 최적화 과정을 거쳤는데, `drawIndexed()` 방식이다.
+  - tail을 그릴 index는 미리 고정된 순서의 초기값을 지정해놓고, vertex만 업데이트해준 방식이다.
+  - 하지만 여전히 비슷한 수준의 계산과 memory transfer가 필요했다.
+  - 우선 테스트하는 수준의 numParticles에서는 적당한 연산속도로 계산이 가능해서, 당분간 이 구조를 사용했다.
+  - [commits](https://github.com/keechang-choi/Vulkan-Graphics-Example/pull/4/commits/9ee5e6cab846b452cddf3100bb5ca8307b895c93)
+- 추후 model attraction부분을 작성하고 나면, 더 많은 수의 particle이 필요해서 CPU를 거치는 방식의 trajectory는 한계가 있어 모든 계산은 GPU로 옮겨줬다. 
+  - [trajectory in GPU](#trajectory-in-gpu)
+- 다음은 작성 과정에서 나온 오류와 해결 과정들이다. 
+
+
+| <div style="width:300px">image</div> | explanation |
+| :---: | :--- |
+| ![image](/images/vge-particle-10.png) | 처음 tailVertex의 vertex state create info에서 offset 관련 잘못된 지정으로 발생한 문제이다. 원점이 계속 포함된 trajectory가 나타났다. |
+| ![image](/images/vge-particle-11.png) | `drawIndexed()` 를 사용했을 때 나타난 문제점이다. <br> 자세히 보면, trajectory가 끊어져야하는 지점(다른 particle로 넘어갈 때)도 이어져 있는데, 파이프라인을 생성할때, inputAssemblyState의 [`primitiveRestartEnable`](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPipelineInputAssemblyStateCreateInfo.html)를 지정해주어야 하는 부분이다. 이를 통해 index buffer에 알맞는 restart index를 지정해주면, 그 index부터 geometry를 다시 그리기 시작하게 할 수 있어서 한번의 draw call로 원하는 trajectory를 모두 그릴수 있게 된다.  |
+| ![image](/images/vge-particle-20.png) | ^^  |
+| ![image](/images/vge-particle-12.png) | trajectory를 올바르게 그린 후에 확인한 첫번째 오류인데, 궤도의 첫 부분의 오차가 유난히 큰 문제가 있었다. <br> simulation 속도를 엄청 느리게 할 때는 이런 오류가 나타나지 않아 delta time과 관련된 오차 부분을 살펴봤다. 원인은 frameTimer의 값이 1.0으로 초기화 되어 있어서 발생한 integration error였고, 단순히 0으로 바꾸면서 해결됐다. |
+| ![image](/images/vge-particle-13.png) | 최종적으로 two-particle에 대해 예상한 것과 동일한 궤도를 확인하면서 검증을 마쳤다.  |
+
+### visualization
+시각적인 효과를 위해, tail의 alpha 값을 오래된 것 일수록 작아지도록 설정했다. 이 alpha 계산도 처음에는 CPU 측에서 해주다가, 이후에는 tail vertex의 head index와 차이값을 통해 shader에서 draw 직전에 계산하도록 옮겨주었다.
+
+또한, tail로 사용할 vertex 수와, tail을 sampling 할 시간 간격 등을 지정해줄 수 있도록 option으로 추가했다.  
+이 sampling 시간 간격은 0이면 매 frame update하게 되고, 그 외의 값은 seconds 단위로 update 주기에 사용된다.
+
+| : 여러 옵션으로 실행한 결과 :   ||
+| :---: | :---: |
+| ![image](/images/vge-particle-14.png) | ![image](/images/vge-particle-15.png) |
+| ![image](/images/vge-particle-16.png) | ![image](/images/vge-particle-17.png) |
+| ![image](/images/vge-particle-18.png) | ![image](/images/vge-particle-49.png) |    
+
 
 
 ## physics and numerical integration
-### integration method 비교
+two-body simulation 결과를 가지고, integration method를 바꿔보면서 실험을 진행했다.  
+이를 위해 옵션 설정도 늘리고, 거리나 energy 등의 값도 plot 하도록 imGui 기능들을 추가했다.  
 
-![image](/images/vge-particle-23.png)  
-![image](/images/vge-particle-24.png)  
-![image](/images/vge-particle-25.png)  
-![image](/images/vge-particle-26.png)  
-![image](/images/vge-particle-27.png)  
-![image](/images/vge-particle-28.png)  
+### integration method 비교
+- 같은 시간 간겨에서 error estimation order가 높은 방식을 사용할수록 오차가 줄어드는 것을 확인했다.
+- 같은 order라면, symplectic 방식이 장기적으로 더 안정적인 결과를 준다.
+- 비교를 위해 시간간격 기준을 여러번 바꿔가면서 각 방식들을 실행해봤는데, 상대적으로 큰 시간간격을 사용하면 갑자기 큰 오차가 나올때도 있고, 상대적으로 작은 시간간격을 사용하면 차이가 나타나지 않을때도 있었다.
+- 오차 수치들이 시간에 따라서 어떤 scale로 변하는지 등 구현과 상관관계를 보기위해서는 data를 export해서 더 자세히 분석할 필요가 있어서 어느정도 눈에 보이는 결과만 확인하고 정량적 분석은 하지 않고 넘어갔다.
+
+| : symplectic 하지 않은 Euler method에서의 문제점 확인 : ||
+| :---: | :---: | 
+|  ![image](/images/vge-particle-23.png)  | ![image](/images/vge-particle-24.png)  |
+|: symplectic 하지 않은 euler method에서 장기적으로 점점 energy가 커지는 현상. tail particle 수를 늘려서 확인함.  :||
+|  ![image](/images/vge-particle-25.png)  |  ![image](/images/vge-particle-26.png)  |
+| :어느정도 정상적인 궤도가 나오더라도 확대해보면 멀어지고 있음: ||
+
+높은 차수의 integrator 들을 실험한 내용은 다음과 같다.
+- delta time 간격이 큰 경우에 가끔씩 큰 오차가 나타남
+- soften 을 크게하면 잘 나타나지 않음 
+- 다른 coefficient 설정에서도 동일한 양상이 나타남. 특히 거리가 가까워져서 속력이 큰 경우 오차가 커지는데, 이런 설정에서는 높은 order의 method가 더 정확한 계산을 해주는 것이 두드러짐.
+
+| 큰 delta time에서 가끔 발생하는 오차 | 다른 coefficient 설정 |
+| :---: | :---: |
+|![image](/images/vge-particle-27.png)   | ![image](/images/vge-particle-28.png)  |
+
 
 
 # mesh attraction
-![image](/images/vge-particle-47.png)  
+![image](/images/vge-particle-47.png) 
+
+위의 이미지는 이전부터 사용하던 사과 model로 particle들을 위치시킨 것이다.  
+이처럼 정적인 위치에 particle을 위치시키는 것은 단순히 초기값만 사용하면 되지만, 앞으로 추가할 기능들을 위해서는 다음의 내용들을 구현해야한다.
+
+- particle이 mesh로 attract되는 기능
+  - 위 이미지 처럼 model의 vertex만 사용하면 촘촘한 정도를 조정할 수 없기 때문에, mesh내부의 attract될 target position을 추가로 계산해내야 한다.
+  - particle이 움직이는 기능은 이전의 gravity simulation과 동일한 구조로 작성하면 되고, 하나의 target pos로 attract되기만 하면 돼서 더 간단하다.
+- interaction
+  - 특정 위치로 particle들이 모이거나, 특정 위치를 기준으로 멀어지는 기능들은 mouse interaction으로 가능하다.
+  - model을 변경했을 때, 선택한 모델로 particle들이 이동하는 기능을 구현해야 한다.
+- skinning과 animation
+  - 정지된 모델로 이동하는 것을 구현하고 나면, model instance를 옮기거나, model의 animation된 vertice들로 attract 되는 기능을 추가한다.
+  - 이를 위해서는 미리 compute shader를 활용해서 계산된 animated model vertices를 저장하고 있어야 한다.
+- tail optimization
+  - $O(n^2)$ 연산이 필요 없으므로 vertex수가 이전보다 훨씬 많을 수 있는데, 이를 반영했을 때 이전과 같은 방식의 trajectory 기능을 사용하면 너무 느려진다.
+  - trajectory 관련 구현인 tail의 내용을 GPU 계산으로 옮겨서 연산 속도를 높이자.
 
 ## interaction
 ![image](/images/vge-particle-model.gif)
-
+크게 두 가지 interaction을 추가했다.
+- imGui option에서 model 변경
+  - 모델은 모두 시작 시 load 해 놓고, option에서 선택한 model instance를 bind하는 기능만 추가하면 된다.
+- mouse click
+  - glfw의 mouse input을 사용했다.
+    - [https://www.glfw.org/docs/3.3/input_guide.html#input_mouse](https://www.glfw.org/docs/3.3/input_guide.html#input_mouse) 
+  - left: 해당 position으로 모든 vertices가 끌리도록 구현
+  - right: 해당 position의 반대 방향으로 밀려나가도록 구현
+  - middle: vertices들이 초기위치로 이동하도록 구현
+  
 ### ray-casting
+mouse left와 right 기능을 위해서는 click된 위치를 world space로 mapping 해줘야 한다.
+
+개념적인 부분은 해당 [opengl-tutorial](http://www.opengl-tutorial.org/miscellaneous/clicking-on-objects/picking-with-a-physics-library/)을 참고했다.  
+
+구현된 기능들을 살펴보면, [commits](https://github.com/keechang-choi/Vulkan-Graphics-Example/pull/4/commits/d09532bb37b49a05c1795dcfed5ecc72e3eda199)
+- mouse position을 normalize해서 `normalizedMousePos`를 계산한다.
+- 이 값을 사용해서, ray의 방향과 시작/끝 점을 구한다.
+- `rayPlaneIntersection()` 함수를 통해, ray와 (camera의 view 방향을 normal로 하고 원점을 지나는 평면) 사이의 교점을 구한다.
+- 해당 지점을 `clickPos`로 사용해서 compute UBO에 전달한다.
+  - 이때, w값을 click의 종류로 지정해줬다.
+- compute shader에서 이 `clickData`를 사용해 지정된 attraction/repulsion 을 가속도에 반영한다.
+
+
 ## triangle uniform distribution
 
-![image](/images/vge-particle-48.png)  
-
 ![image](/images/vge-particle-29.png)  
-![image](/images/vge-particle-30.png)  
-![image](/images/vge-particle-31.png)  
-![image](/images/vge-particle-32.png)  
-![image](/images/vge-particle-33.png)  
-![image](/images/vge-particle-34.png)  
-![image](/images/vge-particle-35.png)  
-![image](/images/vge-particle-36.png)  
 
-### work group size
+[위에서 정리한대로](#mesh-attraction) 삼각형 내부의 uniform한 distributon을 따르는 random한 point로 particle의 target을 추가해줬다.  
+- 전달해줄 data는 이 random weight 밖에 없다.
+- shader에서 index를 그대로 model의 vertices로 mapping 했기 때문인데 shader에서 target position을 계산하는 방식을 보면 다음과 같다.
+- ```glsl
+	vec3 targetPos;
+	if(index < modelUbo.numVertices){
+		targetPos = vertices[index].pos.xyz;
+	}else{
+		uint modIndex = uint(mod(index-modelUbo.numVertices, modelUbo.numIndices/3));
+		vec3 p0 = vertices[indices[modIndex*3]].pos.xyz;
+		vec3 p1 = vertices[indices[modIndex*3+1]].pos.xyz;
+		vec3 p2 = vertices[indices[modIndex*3+2]].pos.xyz;
+		// center of triangle
+		vec4 attractionWeight = particlesIn[index].attractionWeight;
+		targetPos = p0 + attractionWeight.x * (p1-p0) + attractionWeight.y * (p2-p0);
+	}
+	targetPos = (modelUbo.modelMatrix * vec4(targetPos, 1.0)).xyz;
+  ```
+  - particle의 index가 model의 vertices 수보다 작을때는 mesh 내부 점을 사용하지 않는다.
+  - particle이 남는 경우는, 그 남는 index를 3개씩 묶어서 삼각형 하나씩을 찾는다.
+    - 그 삼각형을 기준으로 전달한 random weight에 따라 삼각형 내부의 위치를 계산한다.
+- 위 방식에 의해, particle 수가 많으면 많을 수록 더 촘촘하게 model에 mapping 된 형상을 볼수 있게 된다.
+- 이 방식은 후에 추가할 animation in compute shader도 고려한 방식이다.
+  - target vertex의 위치를 미리 지정해놓는게 아니라, index를 통해 vertex를 찾고 그 vertex위치를 기반으로 내부의 점을 계산한다.
+  - 이 vertices 대신 animated vertices가 들어가기만 하면 animation된 mesh의 내부 좌표가 target으로 설정될 것이다.
+
+
+예시 command  
+```
+.\particle.exe --np 4019 --na 6 -g 500.0 -p 0.75 -s 5.0 --tst 0.01 --ts 10 --width 1920
+```
+
+|  |  |  |
+|:---:|:---:|:---:|
+| ![image](/images/vge-particle-48.png) |  ![image](/images/vge-particle-36.png)   | - |
+|![image](/images/vge-particle-30.png) | ![image](/images/vge-particle-37.png)  | - |
+| ![image](/images/vge-particle-31.png) | ![image](/images/vge-particle-32.png) | ![image](/images/vge-particle-50.png) | 
+|![image](/images/vge-particle-33.png)  | ![image](/images/vge-particle-34.png) | ![image](/images/vge-particle-35.png) |
+
+
 ## skinning in compute shader
 ### Recap: mesh and skin
 
 
-![image](/images/vge-particle-37.png)  
 ![image](/images/vge-particle-38.png)  
 ![image](/images/vge-particle-39.png)  
 ![image](/images/vge-particle-40.png)  
