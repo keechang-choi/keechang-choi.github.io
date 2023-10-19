@@ -1,5 +1,5 @@
 ---
-title: "[WIP] Vulkan Graphics Examples - Particles"
+title: "Vulkan Graphics Examples - Particles"
 date: 2023-10-02T15:00:00
 categories: 
   - study
@@ -128,7 +128,7 @@ model의 mesh attraction에도 위의 수치 적분은 동일하게 적용된다
 # Plan
 
 ## 작업 순서
-- graviti n-body simulation 구현
+- gravity n-body simulation 구현
   - integration method를 여러 방식을 option으로 선택할 수 있도록 구현 후 비교
   - 구현 후, 2-body simulation의 analytic 한 solution 과 비교해서, 옳게 simulation 되는지 검증.
     - 확인을 위한 particle의 trajectory rendering 기능 구현
@@ -166,7 +166,7 @@ pipeline barrier에 SSBO buffer memory barrier를 사용해서 execution/memory 
 - two queue
   - 이전 예제와의 차이점이 또 존재하는데, compute dedicated queue family의 사용이다.
   - 이전에는 하나의 queue에서 compute와 graphics 작업을 모두 수행했다면, 이번에는 compute 목적의 queue family에서 다른 queue를 하나 더 생성했다.
-  - pipeline barrier에는 이를 위한 기능이 있는데, `Queue ownership transfer` 개념이다.
+  - pipeline barrier에는 이를 위한 기능이 있는데, `Queue family ownership transfer` 개념이다.
 - 기본적인 설명은 다음을 참고 했다.
   - [https://www.khronos.org/blog/understanding-vulkan-synchronization](https://www.khronos.org/blog/understanding-vulkan-synchronization)
   - 서로 다른 두 queue family index의 queue가 하나의 자원(buffer나 image)를 공유할 때, memory access에 synchronization을 제공.
@@ -174,41 +174,42 @@ pipeline barrier에 SSBO buffer memory barrier를 사용해서 execution/memory 
 - 자세한 설명은 spec 문서를 참고하면 된다.
   - [https://registry.khronos.org/vulkan/specs/1.3/html/vkspec.html#synchronization-queue-transfers](https://registry.khronos.org/vulkan/specs/1.3/html/vkspec.html#synchronization-queue-transfers)
   - 자원을 생성할 때, `VkSharingMode`를 `VK_SHARING_MODE_EXCLUSIVE`로 지정한 경우는 명시적으로 queue family 간의 ownership을 옮겨줘야 한다.
-  - 두가지 부분 release / acquire 과정으로 구성되는데, 
-    - release
-      - pipeline barrier가 제출하는 queue가 src queue family index에 해당한다.
-      - dst access mask는 무시된다. visibility operation이 실행되지 않는다. 
-      - release operation은 availability operation이후에 실행되고, second synchronization scope의 연산들 이전에 실행된다.
-    - acquire
-      - pipeline barrier가 제출하는 queue가 dst queue family index에 해당한다.
-      - 이전에 release한 자원의 영역과 일치해야 한다.
-      - src access mask가 무시된다. availability operation이 실행되지 않는다.
-      - acquire operation은 first synchronization scope의 연산들 이후에 실행되고, visibility operation 이전에 실행된다.
-    - 그리고 이 release와 acquire 연산들은 알맞은 순서에 실행되도록 app에서 semaphore등의 사용을 통해 execution dependency를 지정해야 한다고 한다.
-      - 우리도 semaphore를 통해 execution dependency를 주었는데, 사용될 부분을 미리 살펴보면 다음과 같아서 이다.
-        - [1] storage buffer 로 buffer copy 직후 graphics queue에서 release (transfer queue는 별도로 쓰지 않고 graphics queue를 사용했음)
-        - [2] compute command recording에서, compute queue에서 acquire
-        - [3] recording 끝낸 후, compute queue에서 release
-        - [4] draw command recording에서, graphics queue에서 acquire
-        - [5] recording 끝낸 후, graphics queue에서 release
-      - 일단 첫 release는 초기화 단계이므로 가장 먼저 실행 후 마무리 된다. (`oneTimeSubmit()`을 사용했기 때문에 `waitIdle()` 과정을 통해 host에서 완료를 기다림)
-      - `buildComputeCommandBuffers()` 를 먼저 호출하고 제출하게 되는데, 이때 사용하는 semaphores는 다음과 같다.
-        - wait: `graphics.semaphores[currenrFrameIndex]`
-        - signal: `compute.semaphores[currenrFrameIndex]`
-      - 그 후 draw 목적의 `buildCommandBuffers()` 를 호출하고 제출하는데, 이때 사용하는 semaphores는 다음과 같다.
-        - wait: `compute.semaphores[currenrFrameIndex]` (기존 presentCompleteSemaphores도 여전히 있다.)
-        - signal: `graphics.semaphores[currenrFrameIndex]` (기존 renderCompleteSemaphores도 여전히 있다.)
-      - 추가되는 semaphores는 두가지 종류의 frames in flight 수 만큼이고, 이 중 graphics의 것만 signaled 상태로 생성한다.
-      - 정리해보면 첫 frame rendering 과정에서는 [1]의 release 이후, ([2]의 acquire과 [3]의 release)가 ([4]의 acquire과 [5]의 release) 보다 먼저 실행이 완료되고, 그 후 ([4], [5])의 실행이 완료되면 다시 ([2], [3]) 의 실행 완료가 반복되는 구조이다.
-        - [2]와 [3]의 순서는 semaphore가 아니라, acquire에서 지정한 dst stage mask로 인해 생긴 execution dependency chain으로 강제된다.
-          - acquire시 second synch scope는 dst stage mask로 지정할 `ComputeShader` stage의 연산들이 되고, 그 사이에 dispatch 명령이 있고, 그 후에 release 시 first synch scope는 src stage mask로 지정할 `ComputeShader` stage의 연산들이 된다.
-          - 결국 release, acquire의 정의 시 언급 된 실행 순서에 따라서, [2]의 acquire이후 [3]의 release 실행을 보장할 수 있게 된다.
-          - action type commands이외에는 stage의 개념이 없으므로, 다른 `vkCmdPipelineBarrier()` 자체가 synch scope에 포함된다고 볼 수는 없을 것 같다.
-        - 마찬가지로 [4]와 [5]도 중간에 지정해주는 `VertexInput` stage의 역할로 인해 execution dependency가 생길 것이다.
-      - 그리고 각 pipelineBarrier에서 해당되는 src/dst stage mask 이외에는 none pipeline stage (top/bottom)을 사용해줬는데, 각각 기다릴 것이 없고 기다리게할 것이 없게 해서 알아서 최적화 되도록 설정해줄 수 있다.
+  - 두가지 부분 release / acquire 과정으로 구성되는데,  
+    release  
+    - pipeline barrier가 제출하는 queue가 src queue family index에 해당한다.
+    - dst access mask는 무시된다. visibility operation이 실행되지 않는다. 
+    - release operation은 availability operation이후에 실행되고, second synchronization scope의 연산들 이전에 실행된다.  
+  
+    acquire
+    - pipeline barrier가 제출하는 queue가 dst queue family index에 해당한다.
+    - 이전에 release한 자원의 영역과 일치해야 한다.
+    - src access mask가 무시된다. availability operation이 실행되지 않는다.
+    - acquire operation은 first synchronization scope의 연산들 이후에 실행되고, visibility operation 이전에 실행된다.
+  - 그리고 이 release와 acquire 연산들은 알맞은 순서에 실행되도록 app에서 semaphore등의 사용을 통해 execution dependency를 지정해야 한다고 한다.
+    - 우리도 semaphore를 통해 execution dependency를 주었는데, 사용될 부분을 미리 살펴보면 다음과 같다.
+      - [1] storage buffer 로 buffer copy 직후 graphics queue에서 release (transfer queue는 별도로 쓰지 않고 graphics queue를 사용했음)
+      - [2] compute command recording에서, compute queue에서 acquire
+      - [3] recording 끝낸 후, compute queue에서 release
+      - [4] draw command recording에서, graphics queue에서 acquire
+      - [5] recording 끝낸 후, graphics queue에서 release
+    - 일단 첫 release는 초기화 단계이므로 가장 먼저 실행 후 마무리 된다. (`oneTimeSubmit()`을 사용했기 때문에 `waitIdle()` 과정을 통해 host에서 완료를 기다림)
+    - `buildComputeCommandBuffers()` 를 먼저 호출하고 제출하게 되는데, 이때 사용하는 semaphores는 다음과 같다.
+      - wait: `graphics.semaphores[currenrFrameIndex]`
+      - signal: `compute.semaphores[currenrFrameIndex]`
+    - 그 후 draw 목적의 `buildCommandBuffers()` 를 호출하고 제출하는데, 이때 사용하는 semaphores는 다음과 같다.
+      - wait: `compute.semaphores[currenrFrameIndex]` (기존 presentCompleteSemaphores도 여전히 있다.)
+      - signal: `graphics.semaphores[currenrFrameIndex]` (기존 renderCompleteSemaphores도 여전히 있다.)
+    - 추가되는 semaphores는 두가지 종류의 frames in flight 수 만큼이고, 이 중 graphics의 것만 signaled 상태로 생성한다.
+    - 정리해보면 첫 frame rendering 과정에서는 [1]의 release 이후, ([2]의 acquire과 [3]의 release)가 ([4]의 acquire과 [5]의 release) 보다 먼저 실행이 완료되고, 그 후 ([4], [5])의 실행이 완료되면 다시 ([2], [3]) 의 실행 완료가 반복되는 구조이다.
+      - [2]와 [3]의 순서는 semaphore가 아니라, acquire에서 지정한 dst stage mask로 인해 생긴 execution dependency chain으로 강제된다.
+      - acquire시 second synch scope는 dst stage mask로 지정할 `ComputeShader` stage의 연산들이 되고, 그 사이에 dispatch 명령이 있고, 그 후에 release 시 first synch scope는 src stage mask로 지정할 `ComputeShader` stage의 연산들이 된다.
+      - 결국 release, acquire의 정의 시 언급 된 실행 순서에 따라서, [2]의 acquire이후 [3]의 release 실행을 보장할 수 있게 된다.
+      - action type commands이외에는 stage의 개념이 없으므로, 다른 `vkCmdPipelineBarrier()` 자체가 synch scope에 포함된다고 볼 수는 없을 것 같다.
+    - 마찬가지로 [4]와 [5]도 중간에 지정해주는 `VertexInput` stage의 역할로 인해 execution dependency가 생길 것이다.
+    - 그리고 각 pipelineBarrier에서 해당되는 src/dst stage mask 이외에는 none pipeline stage (top/bottom)을 사용해줬는데, 각각 기다릴 것이 없고 기다리게할 것이 없게 해서 알아서 최적화 되도록 설정해줄 수 있다.
 - 예시
   - [https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#transfer-dependencies](https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#transfer-dependencies)
-  - transfer 과정에서 이후에 사용할 queue의 family index가 다른 경우는 Queue ownership transfer를 수행해주고 있다.
+  - transfer 과정에서 이후에 사용할 queue의 family index가 다른 경우는 Queue family ownership transfer를 수행해주고 있다.
   - [https://stackoverflow.com/questions/60310004/do-i-need-to-transfer-ownership-back-to-the-transfer-queue-on-next-transfer](https://stackoverflow.com/questions/60310004/do-i-need-to-transfer-ownership-back-to-the-transfer-queue-on-next-transfer)
     - 위 예시에 해당하는 질문글이고, semaphore 사용과 double buffering 사용시 장점등을 답변하고 있다.
 
@@ -219,6 +220,8 @@ pipeline barrier에 SSBO buffer memory barrier를 사용해서 execution/memory 
 다음은 particle rendering과 shader에 관련된 부분의 진행과정이다.
 - vertex shader 구현 [shaders/particle/particle.vert](https://github.com/keechang-choi/Vulkan-Graphics-Example/blob/main/shaders/particle/particle.vert)
 - fragment shader 구현 [shaders/particle/particle.frag](https://github.com/keechang-choi/Vulkan-Graphics-Example/blob/main/shaders/particle/particle.frag)
+
+particle의 초기 위치 설정은 원본예제의 attractor를 사용하는 방식과 동일하게 작성했다. 각 축마다 양쪽으로 2개씩 위치시키는 방식인데, 해당 위치에는 mass가 큰 particle도 하나씩 위치시켜서 attractor의 역할을 한다. 이 mass는 particle의 크기를 통해 나타내도록 shader에서 구현된다.  
 
 | image | explanation |
 | :---: | :--- |
@@ -232,7 +235,7 @@ graphics pipeline은 위처럼 particle rendering으로만 단순하게 구성�
 추후에 trajectory를 추가하면서, trajectory pipeline을 추가하게 된다.
 
 ## Particle-Calculate-Integrate
-파이프라인과 그 shader 구성은 크게 `step-2`으로 이뤄진다.  
+파이프라인과 그 shader 구성은 크게 2개의 step으로 이뤄진다.  
 - `step-1`에서 differential equation의 evalution을 통해 그 시점에 필요한 값들을 계산한다. (주로 가속도 계산이라고 생각하면 된다.)
 - `step-2`에서는 계산된 값들을 누적시키는 적분을 수행한다. 최종 position도 계산한다.
 
@@ -318,9 +321,9 @@ Euler method와 symplectic-Euler method를 비교했을 때는, 연산량의 차
 | ![image](/images/vge-particle-8.png) | ![image](/images/vge-particle-9.png) |
 
 ### Specialization Constants
-이 값들은 상수 역할을 할 수 있지만, compile이후에 특정되는 값들이다.
+shader에서 사용하는 계수나, 상수로서 필요한 값들은 specialization constants 기능을 통해 compile 이후의 pipeline을 생성할 때, runtime에서 전달이 가능하다. 처음에는 여러 계산에 사용되는 계수들도 이 방식으로 전달해줬지만, 이후에는 실험 중 UI interation으로 변경이 필요한 값들은 Uniform buffer 사용으로 변경했다.
 
-vulkan-hpp의 wrapper들을 쓰면 다음과 같은 방식으로 사용이 가능하다.
+vulkan-hpp의 wrapper들을 쓰면 다음과 같은 방식으로 사용이 가능하고, 초기 전달해주던 데이터의 값들이다.  
 
 ```c++
     std::vector<vk::SpecializationMapEntry> specializationMapEntries;
@@ -369,6 +372,8 @@ a는 type이 고정되어 있기 때문에 implicit constructor 사용이 문제
 
 ## Trajectory
 
+particle이 움직이면서 만드는 궤도 혹은 자취를 남기기 위한 기능이다. 내구 구현 명칭은 `tail`로 명명했다. 
+
 - 첫 구현은 가장 naive 한 접근을 사용했다
   - 각 particle 마다 tail이라는 queue 형태로 position을 CPU에서 저장해놓고, 이를 다시 GPU의 tail draw shader로 넘겨주는 방식이다.
   - 이때는 draw도 각 particle 수만큼 호출해줬다.
@@ -393,7 +398,7 @@ a는 type이 고정되어 있기 때문에 implicit constructor 사용이 문제
 | ![image](/images/vge-particle-13.png) | 최종적으로 two-particle에 대해 예상한 것과 동일한 궤도를 확인하면서 검증을 마쳤다.  |
 
 ### Visualization
-시각적인 효과를 위해, tail의 alpha 값을 오래된 것 일수록 작아지도록 설정했다. 이 alpha 계산도 처음에는 CPU 측에서 해주다가, 이후에는 tail vertex의 head index와 차이값을 통해 shader에서 draw 직전에 계산하도록 옮겨주었다.
+시각적인 효과를 위해, tail의 alpha 값을 오래된 것 일수록 작아지도록 설정했다. (fade out 기능) 이 alpha 계산도 처음에는 CPU 측에서 해주다가, 이후에는 tail vertex의 head index와 차이값을 통해 shader에서 draw 직전에 계산하도록 옮겨주었다.
 
 또한, tail로 사용할 vertex 수와, tail을 sampling 할 시간 간격 등을 지정해줄 수 있도록 option으로 추가했다.  
 이 sampling 시간 간격은 0이면 매 frame update하게 되고, 그 외의 값은 seconds 단위로 update 주기에 사용된다.
@@ -637,6 +642,9 @@ particle 수를 늘려서 실행했을 때, fps가 매우 낮아지는 경우를
 animation의 속도가 너무 느리면, particle이 이동하기 전에 target 위치가 바뀌면서 예상된 animation을 알아보기 힘든 경우가 나올 수도 있다. 관련 설정 수치들 모두 imGui 패널에서 수정가능하도록 구현되어 있다.  
 
 ![image](/images/vge-particle-animation.gif)  
+
+
+![image](/images/vge-particle-ship.gif)  
 
 
 # 마무리
