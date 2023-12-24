@@ -7,7 +7,7 @@ tags:
   - graphics
 image: 
   path: /images/vge-pbd/vge-pbd-1.png
-  thumbnail: /images/vge-pbd/vge-pbd-1.gif
+  thumbnail: /images/vge-pbd/vge-pbd-1.png
 ---
 
 Position Based Dynamics관련 내용들을 습득하고, 예제들을 구현해보기로 했다. lecture에는 영상과 구현 자료가 잘 정리되어 있고, 논문 및 course note 등 정확한 정보가 충분해서 공부하기 좋았다.  
@@ -180,6 +180,13 @@ ball 들이 서로 충돌했을 때 mass를 고려한 충돌을 처리했다.
 아래는 이 제약조건을 활용한 시뮬레이션과 직접 수식을 풀어서 계산한 analytic 한 solution의 비교장면이다.
 ![image](/images/vge-pbd/vge-pbd-9.png)
 
+
+![image](/images/vge-pbd/vge-pbd-bead-analytic.gif)
+
+처음에는 붉은색(analytic solution)과 파란색(simulation) 결과가 동일하게 움직이지만 오차가 점차 커지는 것을 볼 수 있다.  
+여러 방법으로 이 오차를 줄일 수 있는데, substep 수를 늘리는 방식으로 간단하게 해결 가능하다.  
+
+
 렉쳐에서는 제약조건 달성을 위한 세가지 기존의 방법을 설명하고, 우리가 사용할 PBD 방식의 해결법이 이 문제들을 어떻게 처리하는지 설명한다.  
 - spring을 활용
   - stiffness를 조정해야하는 문제가 있고, 큰 stiffness는 numerical problems를 일으킨다.
@@ -252,18 +259,33 @@ particle 수를 옵션에서 늘릴 수 있게 했는데, 다음과 같은 결�
 
 
 ## SoftBody
+sofybody lecture를 확인하면, 3d model에 대해서 tetrahedorn(사면체)의 부피를 보존하는 제약조건을 주어 이를 구현한다.  
+제약조건은 크게 두가지인데, 다음과 같다.
+- 사면체의 각 edge들의 길이 보존
+- 사면체의 부피 보존
+
+lecture의 코드에서는 이 모델과, 부피보존을 위한 사면체 정보를 모두 제공하는데, 이 데이터가 어떻게 구성되었는지는 이후에 다루기때문에, 나는 2D sofybody와 triangle을 이용해서 구현하기로 결정했다.  
+
 ### XPBD
 
-![image](/images/vge-pbd/vge-pbd-18.png)
-![image](/images/vge-pbd/vge-pbd-19.png)
-![image](/images/vge-pbd/vge-pbd-20.png)
-![image](/images/vge-pbd/vge-pbd-21.png)
-![image](/images/vge-pbd/vge-pbd-22.png)
-### Interaction
+| image | explanation |
+| :---: | :--- |
+| ![image](/images/vge-pbd/vge-pbd-18.png) | 초기 sofybody의 구조를 구현하고, 중력에 의한 이동을 확인했다. |
+| ![image](/images/vge-pbd/vge-pbd-19.png) | 초기 constraint를 만족 시키도록 위치를 수정해주어서, soft circle이 collapse 되는 현상이 구현된 것을 확인했다. 아직 길이와 부피 제약조건에 들어가는 계수(compliance 혹은 stiffness)를 결정하지는 않았다.   |
+| ![image](/images/vge-pbd/vge-pbd-20.png) | soft circle이전에 더 간단한 polygon을 구현해서, 길이와 부피 제약조건의 적당한 계수들의 역할을 확인했다. |
+| ![image](/images/vge-pbd/vge-pbd-21.png) | blender 를 활용해서 2D soft circle에 쓰일 object를 작성했다. |
+| ![image](/images/vge-pbd/vge-pbd-22.png) | 구현된 soft circle의 모습이고, 아직 collision은 구현되지 않았기에 두 softbody가 겹쳐진 모습이다. |
 
-![image](/images/vge-pbd/vge-pbd-23.png)
-![image](/images/vge-pbd/vge-pbd-24.png)
+### Interaction
+lecture와 마찬가지로, 마우스 클릭과 drag-drop을 통한 간단한 interatction part를 작성했다. 이전 particle 예제에서 사용했던, ray-cast형식의 상호작용을 활용해서 클릭한 물체를 옮길 수 있도록 구현했다.  
+| | |
+|:-:|:-:|
+|![image](/images/vge-pbd/vge-pbd-23.png) | ![image](/images/vge-pbd/vge-pbd-24.png) |
+|![image](/images/vge-pbd/vge-pbd-soft2d.gif) | ![image](/images/vge-pbd/vge-pbd-soft2d-3.gif)|
+
 ## Neighbor search
+충돌을 구현하기 위하 
+
 ### Spatial hash
 ## Collision by constraint
 
