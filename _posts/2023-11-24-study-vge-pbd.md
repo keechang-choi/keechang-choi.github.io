@@ -35,6 +35,7 @@ Position Based Dynamics관련 내용들을 습득하고, 예제들을 구현해�
     - [Interaction](#interaction)
   - [Neighbor search](#neighbor-search)
     - [Spatial hash](#spatial-hash)
+    - [hash function](#hash-function)
   - [Collision by constraint](#collision-by-constraint)
 - [마무리](#마무리)
 
@@ -137,6 +138,7 @@ numerical integration 관련해서는 이번 기회에 못본 내용들을 좀 �
 
 
 floor를 추가하고 animation을 확인했다. empty texture를 checker board로 설정했다.
+
 |  |  |
 | :---: | :--- |
 | ![image](/images/vge-pbd/vge-pbd-2.png) | ![image](/images/vge-pbd/vge-pbd-3.png) |
@@ -266,8 +268,6 @@ sofybody lecture를 확인하면, 3d model에 대해서 tetrahedorn(사면체)�
 
 lecture의 코드에서는 이 모델과, 부피보존을 위한 사면체 정보를 모두 제공하는데, 이 데이터가 어떻게 구성되었는지는 이후에 다루기때문에, 나는 2D sofybody와 triangle을 이용해서 구현하기로 결정했다.  
 
-### XPBD
-
 | image | explanation |
 | :---: | :--- |
 | ![image](/images/vge-pbd/vge-pbd-18.png) | 초기 sofybody의 구조를 구현하고, 중력에 의한 이동을 확인했다. |
@@ -276,20 +276,131 @@ lecture의 코드에서는 이 모델과, 부피보존을 위한 사면체 정�
 | ![image](/images/vge-pbd/vge-pbd-21.png) | blender 를 활용해서 2D soft circle에 쓰일 object를 작성했다. |
 | ![image](/images/vge-pbd/vge-pbd-22.png) | 구현된 soft circle의 모습이고, 아직 collision은 구현되지 않았기에 두 softbody가 겹쳐진 모습이다. |
 
+### XPBD
+
+lecture 중간에 XPBD(Extended Position Based Dynamics)를 설명해주면서, 다른 방법들과 비교해주는 내용을 정리해봤다.
+
+- force based
+  - 관통으로 발생한 겹친 거리와 stiffness 계수를 사용해서 충돌을 처리한다.
+  - force -> velocity -> position 순으로 변경된다.
+  - reaction lag이 존재한다.
+  - stiff한 처리를 위해서 계수를 키우면 stability 문제와 overshooting 문제가 생긴다.
+    - 이 stiffness를 어떻게 정해야 하는지도 문제다.
+  - k를 작게해서 squish한 system을 만들 수 있다.
+- impulse based simulation
+  - 관통은 detection 에만 사용된다.
+  - separating velocity가 따로 있고, impulse 개념으로 이 수치를 정한다.
+  - 더 stable하고, velocity update를 통제할 수 있어서 overshooting 문제가 없다.
+  - velocity만 사용하는 방식이기에, drift 문제가 발생한다. 이를 해결하기 위한 별도의 테크닉이 필요.
+- PBD
+  - 관통은 detection에만 사용됨.
+  - position을 직접 바꿔서 overlap을 없앤다.
+  - 그 후 dynamics를 위한 velocity update
+  - position을 통제하기 때문에, 조건없이 stable하다.
+  - drift 문제가 없다.
+  - PBD는 integrator와 solver를 합친 개념이다.
+  - constraint solve를 여러 iterative한 방식을 쓰는것 보다, substep으로 시간을 나눠서 반복하는게 더 높은 성능을 보였음.
+  - physical and accurate
+    - implicit Euler integration
+    - newton minimization of a backward Euler integration step
+    - non linear Gauss-Seidel method
+    - 등의 이론적 기반.
+    - 하지만 softness 처리에서 계수를 곱하는 방식은 unphysical하고, time-step 크기에 dependent하다는 문제가 생김. 
+- XPBD
+  - soft하지 않은 constraint처리에 대해서는 PBD와 동일하다. (stiffness가 inf)
+  - constraint로부터 gradient를 계산하고, lambda를 계산할 때, time-step 크기에 dependent한 compliance alpha를 넣는다.
+    - 이 compliance는 physical stiffness의 역수 개념이 된다.
+  
+
+이후 lecture에서는 변형가능한 dynamics를 구현하는 두가지 모델과 그 solver의 차이도 설명해주는데, 요약된 특성들을 나열한다.
+- continuous model, global solver
+- discrete model, local solver
+
 ### Interaction
 lecture와 마찬가지로, 마우스 클릭과 drag-drop을 통한 간단한 interatction part를 작성했다. 이전 particle 예제에서 사용했던, ray-cast형식의 상호작용을 활용해서 클릭한 물체를 옮길 수 있도록 구현했다.  
+아직 충돌에 관련된 내용을 구현하지 않아 물체들이 겹쳐진다.  
+
 | | |
 |:-:|:-:|
 |![image](/images/vge-pbd/vge-pbd-23.png) | ![image](/images/vge-pbd/vge-pbd-24.png) |
 |![image](/images/vge-pbd/vge-pbd-soft2d.gif) | ![image](/images/vge-pbd/vge-pbd-soft2d-3.gif)|
 
+참고로, 출처한 자료에서는 three.js에 구현되어 있는 raycaster와 bounding sphere 기능을 사용하고 있다.
+
 ## Neighbor search
-충돌을 구현하기 위하 
+
+[](https://www.youtube.com/watch?v=D2M8jTtKi44)
+
+
+충돌을 구현하기 위해 neighbor search를 통한 충돌 인식이 먼저 필요하다.
+
+여기서는 lecture를 참고해서 spatial hashing 방식을 사용했다. 이 방식은 충돌 뿐 아니라, liquid, gas, sand, snow 등의 particle 기반 시뮬레이션에 모두 사용된다고 한다. 자세한 알고리즘은 영상에 설명되어 있어 요약해서 정리해놓으려 한다.
+
+- neighbor search는 두 particle pi, pj의 거리가 d 이하인 i,j를 찾는 것이다. 이 거리 d가 2r이면, collision detection이 된다.
+- naive한 방식. O(n^2)의 모든 particle pair에대해 intersection검사를 하는 방식.
+- regular grid 방식.
+  - particle의 center 좌표가 어떤 grid내부에 있는지를 저장하는 방식이다. 이 grid의 spacing 간격으로 좌표를 discretize하면 grid의 index를 얻을 수 있다.
+  - 그 index 주변의 grid cell 들만을 대상으로 check하면 필요한 intersection check의 수를 크게 줄일 수 있다. (2D는 주변 9개, 3D는 27개의 grid cell)
+  - 이 grid index를 사용하는 방식은 공간이 bounded여야만 가능하다. 그래서 필요한 개념이 hash table을 사용하는 것
 
 ### Spatial hash
+
+hash table을 사용한 neighbor search 에서는 원하는 size의 table을 사용할 수 있다. 대신 서로 다른 두 grid cell이 하나의 table entry로 mapping되는 hash collision이 발생할 수 있으므로, hash function과 table size 등 설정에 주의해야한다.  
+
+구현은 다음 자료들을 참고했다.
+- [https://github.com/matthias-research/pages/blob/master/tenMinutePhysics/11-hashing.html](https://github.com/matthias-research/pages/blob/master/tenMinutePhysics/11-hashing.html)
+- [https://carmencincotti.com/2022-10-31/spatial-hash-maps-part-one/](https://carmencincotti.com/2022-10-31/spatial-hash-maps-part-one/)
+- hash table의 구현은 linked list로 구현하면 dense하지 않기때문에 별도의 array를 사용한 테크닉으로 구현하고 있다.
+  - 기본적인 아이디어는, hash table에는 해당 hash key 값에 위치한 particle의 count만 저장하고, dense array에 순차적으로 그 particle의 index를 저장한다.
+- 이를 구성하는 구조는 다음처럼 나눠진다.
+  - 디테일은 영상 참고.
+  - hash class
+  - hash create
+  - hash query
+    - query를 했을 때, 주변 cell에 포함된 모든 particle indices를 반환한다.
+    - hash collision에 의한 false positives는 단순하게 거리 check등으로 거를 수 있다.
+
+
+### hash function
+
+wip
+
 ## Collision by constraint
 
+기존의 tetrahedron의 collision 처리는 다음 자료를 참고했다. (영상에서는 particle의 coliision을 다룬다.)
+
+> [https://matthias-research.github.io/pages/publications/tetraederCollision.pdf](https://matthias-research.github.io/pages/publications/tetraederCollision.pdf)
+
+
+- first pass
+  - 모든 vertices를 cell에 classified되도록 계산한다. (spacing 크기로 나누는 작업)
+  - 모든 tetrahedron의 bounding rectangle AABB를 계산해서 저장해둔다.
+- second pass
+  - 모든 tetrahedron에 대해서 cell에 classifed 되도록 한다.
+  - 저장된 AABB를 통해 cell로 mapping하고, 그 cell에 해당하는 vertices(first pass에서 계산하둥)들 모두와 intersection test를 한다.
+  - intersection test를 vertex가 tetrahedron을 관통하는지에 대해 검사하는데, barycentric coordinates를 사용.
+    - 그 전에 AABB내부에 있는지 검사해서 먼저 필터링한다.
+  - 이 방식을 사용하면, self-collision도 자연스럽게 처리가 가능하다.
+    - vertex가 tetrahedron의 일부 그자체인 경우는 스킵
+  
+해당 자료에서는 time stamp를 사용해서 hash 초기화를 하지 않는 방식을 설명하는데, hash 생성에 관련된 부분은 영상의 방식을 선택했다.
+
+
+먼저 좀 더 간단한 케이스인, edge-point의 collision을 distance constraint로 구현해서 동작을 확인했다.  
 ![image](/images/vge-pbd/vge-pbd-25.png)
+
+[https://github.com/InteractiveComputerGraphics/PositionBasedDynamics/issues/49](https://github.com/InteractiveComputerGraphics/PositionBasedDynamics/issues/49)
+
+collision handling의 경우는 rigid body의 velocity level에서 다뤄야하는데, 현재 예제들에서는 구현하지 않기로 했다.
+
+collision detection과 handling에 있어서, 다른 구현들을 보면서 필요한 개념들을 찾게 되었다.
+- distance field
+- bounding volume hierarchy
+- kd-tree
+- contact point
+등의 방식을 활용해서 system이 구축되어 있어야 일반적인 object간의 충돌 처리를 할 수 있을 것으로 파악했고, 우선은 constraint 기반 collision constraint 의 동작을 확인하는 것에 우선순위를 맞춰 간단한 구현을 진행했다.  
+차선책으로 선택한 방식은, triangle과 point의 collision detection은 유지하고, handlind은 미리 저장해둔 surface(경계 edge들)와 particle을 통해 contact point를 계산해서 edge-point 의 signed distance constraint로 구현하는 방식이다.  
+구현된 결과로 아래처럼, 충돌된 삼각형은 붉게 표시되고, 내부와 충돌하지 않도록 경계까지 밀어주는 constraint의 역할을 확인했다.  
 ![image](/images/vge-pbd/vge-pbd-26.png)
 
 # 마무리
