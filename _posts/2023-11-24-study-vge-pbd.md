@@ -53,7 +53,7 @@ force 기반 방식에서 주로 사용하는 간단한 mass-spring model에 있
 - mass spring network로는 부피 보존 효과를 구현하기 힘들다.  
 
 이에대한 단점을 개선하는 방식이 Position 기반 방식 `PBD` 이라고 제시한다.
-근본적인 방식은, 힘이나 속도를 변경하는 간접적인 방식이 아니라, 위치 자체를 제약조건을 만족하도록 직접 수정하고, 속도는 그에따라 업데이트 해주는 방식이다. 제약조건을 다뤄야하기 때문에, [Constraint Dynamics](https://graphics.pixar.com/pbm2001/pdf/notesf.pdf)의 내용이 자주 등장한다. 예전에 봤던 물리엔진 관련 영상이 이와 같은 자료를 기반으로 하고 있어서 남겨놓겠다.
+힘이나 속도를 변경하는 간접적인 방식이 아니라, 위치 자체를 제약조건을 만족하도록 직접 수정하고, 속도는 그에따라 업데이트 해주는 방식이다. 제약조건을 다뤄야하기 때문에, [Constraint Dynamics](https://graphics.pixar.com/pbm2001/pdf/notesf.pdf)의 내용이 자주 등장한다. 예전에 봤던 물리엔진 관련 영상이 이와 같은 자료를 기반으로 하고 있어서 남겨놓겠다.
 
 ![](https://www.youtube.com/watch?v=TtgS-b191V0)
 
@@ -107,6 +107,8 @@ numerical integration 관련해서는 이번 기회에 못본 내용들을 좀 �
   - Symplectic Euler method
 - Mid-point method
 - Verlet method
+
+WIP
 
 # Lectures & Plan
 
@@ -363,7 +365,36 @@ hash table을 사용한 neighbor search 에서는 원하는 size의 table을 사
 
 ### hash function
 
-wip
+reference
+- [https://stackoverflow.com/questions/5889238/why-is-xor-the-default-way-to-combine-hashes](https://stackoverflow.com/questions/5889238/why-is-xor-the-default-way-to-combine-hashes)
+- [https://stackoverflow.com/questions/35985960/c-why-is-boosthash-combine-the-best-way-to-combine-hash-values](https://stackoverflow.com/questions/35985960/c-why-is-boosthash-combine-the-best-way-to-combine-hash-values)
+- [https://burtleburtle.net/bob/hash/doobs.html](https://burtleburtle.net/bob/hash/doobs.html)
+- [https://probablydance.com/2018/06/16/fibonacci-hashing-the-optimization-that-the-world-forgot-or-a-better-alternative-to-integer-modulo/](https://probablydance.com/2018/06/16/fibonacci-hashing-the-optimization-that-the-world-forgot-or-a-better-alternative-to-integer-modulo/)
+- [http://myeyesareblind.com/2017/02/06/Combine-hash-values/](http://myeyesareblind.com/2017/02/06/Combine-hash-values/)
+  
+
+hash table 사용에서 가장 핵심이 되는 부분이다. 입력된 key 값을 어떤 hash key 값으로 변환할 지 계산하는 방식인데, 이전에 model vertex deduplication 작업에서도 잠깐 다뤘다.  
+그때는 여러 `glm::vec` 데이터의 tuple을 combine 할때 언급했는데, pos, normal, uv, color 등이 묶여서 사용되었고, 각각의 hash key 값을 combine 해주는 방식으로 boost 구현 방식을 썼다.  
+[glm의 hash 구현](https://github.com/g-truc/glm/blob/master/glm/gtx/hash.inl#L6) 을 보면 vec 자체도 어떻게 hash 값이 결정되는지 볼 수 있는데, 이 역시 boost 방식이다. 이번에 그 내부를 좀 더 다뤄보려 한다.  
+
+hash는 결국 검색을 빠르게 하기위한 저장구조인데, data가 많으면 hash function을 통해 나온 key 값이 충돌하는 collision의 발생이 많아져 속도가 느려진다. 이 관점에서 두 data를 하나의 hash value로 합치는 간단한 방식들을 생각해보면 다음과 같다.
+
+- 단순히 두 hash를 xor하는 방식 -> symmetric해서 단점
+- 모든 (a, a) 형태가 0으로 매핑됨
+- 그래서 a xor b 보다는 a + b가 좀 더 좋은 hash combine이라고 볼 수 있다.
+- hash(a) << 1 + hash(a) + hash(b)는 symmetric하지 않아서 좀 더 좋다고 볼 수 있다.
+- 이 값은 결국 hash(a) * 3 + hash(b)와 같은데, 이런식으로 홀수를 한쪽에 곱하면 bijective 한 mapping이 된다. (k-bit 데이터)
+- boost 방식은 이와 유사하게, shift로 lhs를 섞고, 노이즈 역할의 상수를 rhs에 더한 후, 두 값을 xor 하는 원리라고 볼 수 있다.
+  - 이 noise가 단순히 random성을 위해서인지는 명확하지 않으나 참고 article을 보면 랜덤성과 all zero가 zero로 mapping 되지 않기 위해서 사용했다고 나와있긴하다.
+  - 어떤 답변 글들은 단순히 randomness를 위해서라면 golen ratio의 역수가 아니라 pi값을 써도 된다고 하는데, 실험적으로는 큰 차이가 없다고 하는 것 같다.
+
+golden ratio의 역수가 noise로 사용되는데, 이 값에 대해서 fibonacci hashing에 대한 글을 찾아봤다. 이 자료를 보면, 자료형에 따라, 2^64나 2^32를 golden ratio로 나눠서 나온 noise를 multiplicative hash 방식으로 설명하고 있다. 이를 통해 이론적으로 evenly distribute 하게 hash 값들을 mapping할 수 있는 원리라고 설명하고 있긴한데, 이 multiplicative 방식은 여러 단점이 있어 실제로 쓰이진 않지만 golden ratio가 왜 나오게 됐는지 정도의 설명은 해주는 것 같다.
+
+그외에 여러 hash 방식들이 있고 실험적으로 성능들에대한 비교 자료를 남겨놨다. 참고로 c++의 std::unordered_map 같은 경우도 컴파일러마다 다른 내부 구현의 hash function을 사용한다고 하는데, VS C++은 FNV, GCC는 murmur 방식이라고 한다.  
+이 unorderd map은 hash table의 size 마저 내부적으로 최적화해서 사용한다. hash table의 크기가 hash value에 영향을 미치기 때문인데, prime number가 되면 modulo 연산을 했을 때 collision을 줄일 수 있어서 이를 사용하는 방식과, 2의 지수 형태를 table size로 잡아서 modulo 연산의 속도를 높이는 등 각 compiler마다 hash 방식에 따라 다른 구현을 쓴다고 한다.
+
+다른 rotating hash나 기법들에 대한 실험 자료도 참고 자료를 보면 상세히 알 수 있다.
+
 
 ## Collision by constraint
 
@@ -398,10 +429,14 @@ collision detection과 handling에 있어서, 다른 구현들을 보면서 필�
 - bounding volume hierarchy
 - kd-tree
 - contact point
+
+
 등의 방식을 활용해서 system이 구축되어 있어야 일반적인 object간의 충돌 처리를 할 수 있을 것으로 파악했고, 우선은 constraint 기반 collision constraint 의 동작을 확인하는 것에 우선순위를 맞춰 간단한 구현을 진행했다.  
 차선책으로 선택한 방식은, triangle과 point의 collision detection은 유지하고, handlind은 미리 저장해둔 surface(경계 edge들)와 particle을 통해 contact point를 계산해서 edge-point 의 signed distance constraint로 구현하는 방식이다.  
 구현된 결과로 아래처럼, 충돌된 삼각형은 붉게 표시되고, 내부와 충돌하지 않도록 경계까지 밀어주는 constraint의 역할을 확인했다.  
 ![image](/images/vge-pbd/vge-pbd-26.png)
+
+wip : gif 추가
 
 # 마무리
 
