@@ -30,6 +30,7 @@ Position Based Dynamics관련 내용들을 습득하고, 예제들을 구현해�
   - [Beads on wire](#beads-on-wire)
     - [Constraint dynamics](#constraint-dynamics)
   - [Triple pendulum](#triple-pendulum)
+    - [RenderDoc](#renderdoc)
   - [SoftBody](#softbody)
     - [XPBD](#xpbd)
     - [Interaction](#interaction)
@@ -170,22 +171,35 @@ lighting 관련해서는 기존의 point light 하나를 그대로 유지했는�
 단순히 중력에 영향을 받아 움직이는 2d ball이다. 벽과의 충돌만 처리했다.
 
 ## Ball collision - naive
-![image](/images/vge-pbd/vge-pbd-7.png)
+
+|  | 
+| :---: | 
+|![image](/images/vge-pbd/vge-pbd-7.png)|
+| ![image](/images/vge-pbd/vge-pbd-collision-naive.gif) |  
+
+
 단순한 방식의 collision 처리이다.
 ball 들이 서로 충돌했을 때 mass를 고려한 충돌을 처리했다.  
 충돌 검출이 단순한 방식의 O(n^2) 이기 때문에 많은 수의 ball을 처리할 수 없는 한계가 있다.  
 
 
 ## Beads on wire
-![image](/images/vge-pbd/vge-pbd-8.png)
+
+
+|  | 
+| :---: | 
+|![image](/images/vge-pbd/vge-pbd-8.png)|
+| ![image](/images/vge-pbd/vge-pbd-beads.gif) |  
 
 원형 wire에 구슬 beads가 껴있는 상황에 대한 시뮬레이션이다.  ball끼리의 충돌은 이전 예제와 동일하다. 추가된 점은 ball이 원형 wire위에 있도록 유지되는 것인데, 이 현상을 쉽게 묘사하는 방법이 제약조건을 활용한 constraint dynamics이다. 
 
 아래는 이 제약조건을 활용한 시뮬레이션과 직접 수식을 풀어서 계산한 analytic 한 solution의 비교장면이다.
-![image](/images/vge-pbd/vge-pbd-9.png)
 
+|  | 
+| :---: | 
+| ![image](/images/vge-pbd/vge-pbd-9.png)|
+| ![image](/images/vge-pbd/vge-pbd-bead-analytic.gif) |  
 
-![image](/images/vge-pbd/vge-pbd-bead-analytic.gif)
 
 처음에는 붉은색(analytic solution)과 파란색(simulation) 결과가 동일하게 움직이지만 오차가 점차 커지는 것을 볼 수 있다.  
 여러 방법으로 이 오차를 줄일 수 있는데, substep 수를 늘리는 방식으로 간단하게 해결 가능하다.  
@@ -220,7 +234,7 @@ PBD 적용된 방식을 요약하면 다음과 같다.
 geometric constraints (일정 거리를 유지해야 한다던가, 원운동을 해야한다던가)를 만족하면서 물리적 법칙을 따르는 운동을 하도록 하는 것이 목표인 내용이다.  
 이를 위해서 constraint force를 직접 계산해서 particle의 가속도를 legal하도록 변환하는 작업을 수행한다.  
 결국 constraint 만족을 위해 힘과 가속도에 초점을 맞추는 방식인 반면 PBD는 위치에 초점을 맞춘다고 보면 될 것 같다. 
-사용되는 용어느 notation이 유사한 것이 많아 한번 읽어보면 PBD 이해에도 도움이 된다.  
+사용되는 용어는 notation이 유사한 것이 많아 한번 읽어보면 PBD 이해에도 도움이 된다.  
 
 ![image](/images/vge-pbd/vge-pbd-17.png)
 
@@ -253,11 +267,46 @@ XPBD라는 확장된 방식에 대해서도 언급하는데, soft constraint에�
 | ![image](/images/vge-pbd/vge-pbd-11.png) | particle 사이에 line을 추가해준 형태이다. line은 하나의 동일한 직선 모델을 transformation만 바꿔가며 보이도록 설정했다. 이제 좀 pendulum같아 보인다.  |
 | ![image](/images/vge-pbd/vge-pbd-12.png) ![image](/images/vge-pbd/vge-pbd-14.png) | particle의 움직임을 보기위해, tail(혹은 trail, trajectory)를 추가한 모습이다.  <br> 이전 particle 예제에서 초기에 구현했던 방식과 유사하게 구현했는데, 모든 시뮬레이션이 CPU 기반이기도 하고 particle수가 많지 않아 단순한 방식으로 CPU에서 계산한 tail을 mapped buffer에 memcpy하는 방식으로 구현했다. |
 
+tailData에는 각 circle 마다 tailSize의 n개 position 정보가 순서대로 저장된다.  
+tailIndices에는 각 circle 마다 2 * n 의 index 정보가 들어 있는데, 0->1 -- 1->2 -- 2->3 -- 3->4 -- ... -- (n-1)->0 의 형태이다. 이 값들은 loop형태인데, 중간의 한 부분은 끊어지도록 i->i로 index를 업데이트 해준다.  
+
+
+이 i값을 결정하기 위해서 tail의 첫 시작점을 알릴 frontIndex를 저장하고 있는데, 이 값은 shader로 전달해서 fade out 효과를 vertex shader에서 처리할 때도 사용한다.  
+
+
+![image](/images/vge-pbd/vge-pbd-pendulum.gif)
+
 particle 수를 옵션에서 늘릴 수 있게 했는데, 다음과 같은 결과가 나온다.
 
 | | | |
 |:-:|:-:|:-:|
 |![image](/images/vge-pbd/vge-pbd-16.png) | ![image](/images/vge-pbd/vge-pbd-13.png) | ![image](/images/vge-pbd/vge-pbd-15.png) | 
+
+
+### RenderDoc
+
+> https://renderdoc.org/docs/index.html
+
+해당 post 작성하면서 자료를 구성할 때, tail 부분 bug fix를 진행했다. 이때, tail의 fade out 관련 연산이 이뤄지는 vertex shader에서의 문제를 찾기 위해서 renderDoc을 처음 사용해서 디버깅을 진행했는데, 해당 과정을 추가해놓으려 한다.  
+
+
+| image | explanation |
+| :---: | :--- |
+| ![image](/images/vge-pbd/vge-renderDoc-1.png) | app launch 후, 해당 shader가 실행된 상태를 capture했다. |
+| ![image](/images/vge-pbd/vge-renderDoc-2.png) | 이후 mesh viwer에서, tail에 해당하는 VS output 정보를 보고 원하는 값이 들어 있는지 확인했다. |
+
+
+출력한 값은 다음과 같은데, tailSize에 100이 들어있을 것으로 예상했는데, 1280이 들어있었다.  
+
+```glsl
+float tailSize = globalUbo.tailInfo.x;
+float index = float(mod(gl_VertexIndex, tailSize));
+float brightness = index/tailSize;
+outColor = vec3(index, tailSize, brightness);
+```
+
+확인 결과 이 값은 screenDim의 width 값이 잘못들어간 것인데, graphics global UBO의 format이 glsl과 c++ 측 차이로 인해 값이 밀려들어 간 것이었다.
+
 
 
 
@@ -418,9 +467,15 @@ golden ratio의 역수가 noise로 사용되는데, 이 값에 대해서 fibonac
 
 
 먼저 좀 더 간단한 케이스인, edge-point의 collision을 distance constraint로 구현해서 동작을 확인했다.  
-![image](/images/vge-pbd/vge-pbd-25.png)
 
-[https://github.com/InteractiveComputerGraphics/PositionBasedDynamics/issues/49](https://github.com/InteractiveComputerGraphics/PositionBasedDynamics/issues/49)
+|  |
+| :---: |
+| ![image](/images/vge-pbd/vge-pbd-25.png) |
+| ![image](/images/vge-pbd/vge-pbd-edge-constraint.gif)  | 
+
+
+
+> [https://github.com/InteractiveComputerGraphics/PositionBasedDynamics/issues/49](https://github.com/InteractiveComputerGraphics/PositionBasedDynamics/issues/49)
 
 collision handling의 경우는 rigid body의 velocity level에서 다뤄야하는데, 현재 예제들에서는 구현하지 않기로 했다.
 
@@ -434,9 +489,13 @@ collision detection과 handling에 있어서, 다른 구현들을 보면서 필�
 등의 방식을 활용해서 system이 구축되어 있어야 일반적인 object간의 충돌 처리를 할 수 있을 것으로 파악했고, 우선은 constraint 기반 collision constraint 의 동작을 확인하는 것에 우선순위를 맞춰 간단한 구현을 진행했다.  
 차선책으로 선택한 방식은, triangle과 point의 collision detection은 유지하고, handlind은 미리 저장해둔 surface(경계 edge들)와 particle을 통해 contact point를 계산해서 edge-point 의 signed distance constraint로 구현하는 방식이다.  
 구현된 결과로 아래처럼, 충돌된 삼각형은 붉게 표시되고, 내부와 충돌하지 않도록 경계까지 밀어주는 constraint의 역할을 확인했다.  
-![image](/images/vge-pbd/vge-pbd-26.png)
 
-wip : gif 추가
+|  |
+| :---: |
+| ![image](/images/vge-pbd/vge-pbd-26.png) |
+| ![image](/images/vge-pbd/vge-pbd-softbody.gif)  | 
+
+
 
 # 마무리
 
