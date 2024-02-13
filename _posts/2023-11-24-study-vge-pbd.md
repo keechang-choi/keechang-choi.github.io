@@ -1,5 +1,5 @@
 ---
-title: "[WIP] Vulkan Graphics Examples - PBD"
+title: "Vulkan Graphics Examples - PBD"
 date: 2023-11-24T15:00:00
 categories: 
   - study
@@ -10,9 +10,9 @@ image:
   thumbnail: /images/vge-pbd/vge-pbd-1.png
 ---
 
-Position Based Dynamics관련 내용들을 습득하고, 예제들을 구현해보기로 했다. lecture에는 영상과 구현 자료가 잘 정리되어 있고, 논문 및 course note 등 정확한 정보가 충분해서 공부하기 좋았다.  
-이론과 관련되어서는, 이전부터 조금씩 봐왔던 것들 중 자세히 짚고 넘어가지 못한 내용들을 정리하려 한다. numerical integration과 hash 관련 내용들이 그렇다.  
-일부는 예시들을 그대로 구현한 것 도 있고, 일부 Vulkan 활용에 편하도록 수정한 것들도 있는데, 아직은 GPU 활용한 예제를 다루지 않고 CPU base의 간단한 simulation위주로 작성했다.  
+`PBD(Position Based Dynamics)` 관련 내용들을 습득하고 예제들을 구현해보기로 했다. lecture에는 영상과 구현 자료가 잘 정리되어 있고 논문 및 course note 등 정확한 정보가 충분해서 공부하기 좋았다.  
+이론과 관련되어서는 이전부터 조금씩 봐왔던 것들 중 자세히 짚고 넘어가지 못한 내용들을 정리하려 한다. numerical integration과 hash 관련 내용들이 그렇다.  
+여러 simtulation 예시들이 나오는데, 일부는 예시들을 그대로 구현한 것 도 있고, 일부 Vulkan 활용에 편하도록 수정한 것들도 있다. 아직은 GPU 활용한 예제를 다루지 않고 CPU base의 간단한 simulation 위주로 작성했다.  
 
 > [https://matthias-research.github.io/pages/tenMinutePhysics/index.html](https://matthias-research.github.io/pages/tenMinutePhysics/index.html)
 
@@ -81,7 +81,7 @@ force 기반 방식에서 주로 사용하는 간단한 mass-spring model에 있
     - 여기서 충돌 등으로 인해 추가적으로 필요한 속도 처리를 해주는 것 같다.
 
 이와 같이 알고리즘이 간단하고, 병렬화하기 좋은 구조로 되어있는 것이 장점이다. constraint solve에서는 iterative한 method를 쓰는 것 보다, dt 자체를 substep으로 쪼개서 수행하는 것이 결과가 좋다는 실험 결과도 제시한다.  
-이 알고리즘의 correctness나 convergence rate 혹은 error approximation 등에 대해서 생각해보려면, time integration 관련 내용이 등장하는데, 주요 키워드는 다음과 같다.  
+이 알고리즘의 correctness나 convergence rate 혹은 error approximation 등에 대해서 생각하기 위해서는 time integration 관련 내용이 등장하는데, 주요 키워드는 다음과 같다.  
 - implicit Euler method
   - abstract에서 제약 준수와 연관된 implicit Euler method의 variational formulation이라고 소개함.
 - Verlet method
@@ -109,7 +109,8 @@ numerical integration 관련해서는 이번 기회에 못본 내용들을 좀 �
 - Mid-point method
 - Verlet method
 
-WIP
+symplectic 개념과 numerical method에 대해서 더 자세히 알기 위한 수학 내용들을 보고 있었는데, 시간이 생각보다 더 소요됐다.  
+differential geometry와 differential equation이 관련된 내용들인데, 학생때 공부했던 내용들과 겹치는 것들이 있으면서도 처음 보는 내용들도 많았다. 나름 공부하는 재미가 있어서 앞으로 더 진행하면서 시간을 나눠서 같이 공부해 나갈 계획이다. 
 
 # Lectures & Plan
 
@@ -285,7 +286,7 @@ particle 수를 옵션에서 늘릴 수 있게 했는데, 다음과 같은 결�
 
 ### RenderDoc
 
-> https://renderdoc.org/docs/index.html
+> [https://renderdoc.org/docs/index.html](https://renderdoc.org/docs/index.html)
 
 해당 post 작성하면서 자료를 구성할 때, tail 부분 bug fix를 진행했다. 이때, tail의 fade out 관련 연산이 이뤄지는 vertex shader에서의 문제를 찾기 위해서 renderDoc을 처음 사용해서 디버깅을 진행했는데, 해당 과정을 추가해놓으려 한다.  
 
@@ -293,7 +294,7 @@ particle 수를 옵션에서 늘릴 수 있게 했는데, 다음과 같은 결�
 | image | explanation |
 | :---: | :--- |
 | ![image](/images/vge-pbd/vge-renderDoc-1.png) | app launch 후, 해당 shader가 실행된 상태를 capture했다. |
-| ![image](/images/vge-pbd/vge-renderDoc-2.png) | 이후 mesh viwer에서, tail에 해당하는 VS output 정보를 보고 원하는 값이 들어 있는지 확인했다. |
+| ![image](/images/vge-pbd/vge-renderDoc-2.png) | 이후 mesh viewer에서, tail에 해당하는 VS output 정보를 보고 원하는 값이 들어 있는지 확인했다. |
 
 
 출력한 값은 다음과 같은데, tailSize에 100이 들어있을 것으로 예상했는데, 1280이 들어있었다.  
@@ -317,7 +318,7 @@ sofybody lecture를 확인하면, 3d model에 대해서 tetrahedorn(사면체)�
 - 사면체의 각 edge들의 길이 보존
 - 사면체의 부피 보존
 
-lecture의 코드에서는 이 모델과, 부피보존을 위한 사면체 정보를 모두 제공하는데, 이 데이터가 어떻게 구성되었는지는 이후에 다루기때문에, 나는 2D sofybody와 triangle을 이용해서 구현하기로 결정했다.  
+lecture의 코드에서는 이 모델과 부피보존을 위한 사면체 정보를 모두 제공하는데, 이 데이터가 어떻게 구성되었는지는 이후에 다루기때문에, 나는 3D에서 오히려 한 차원 내린 2D sofybody와 triangle을 이용해서 구현하기로 결정했다.  
 
 | image | explanation |
 | :---: | :--- |
@@ -506,11 +507,7 @@ collision detection과 handling에 있어서, 다른 구현들을 보면서 필�
 > 그냥 그 일을 하지 마라. 그 시작을 하지 못하는 것 자체가 진입장벽에 걸린 것이고, 그만큼 흥미가 없다는 뜻이다.  
 > 진짜 하고 싶은 일은 어떻게든 찾아내서 뭔가를 시작하게 된다. 그게 1차 진입장벽을 넘은 것이다.
 
-어느정도 공감이 됐다. 첫 직장을 퇴사하고 시간이 꽤 흘렀는데, 알고리즘 공부나 프로그래밍 기법등 공부도 잠시하고, kaggle 로 사이드 프로젝트도 해봤지만 하고 싶은 일을 한다기 보다는 이직을 준비하기 위해 해야되는 것들로 생각했던 것 같다. 거기서 한발짝 더 할 일들을 찾아나가지 못했다.   
-graphics 관련 공부를 하고 Vulkan API 관련 tutorial와 예제 구현, 블로그 정리들을 하면서는 어떻게든 다음 step을 찾게 된다. 이 tutorial을 끝내면, 이 lecture를 끝내면, 이 예제구현을 끝내면 다음에 뭘 할지 어느샌가 다음에 하고 싶은 것을 리스트업해놓게 되고 느리더라도 그 다음 스텝으로 넘어갈 수 있게 됐다. 앞으로는 속도와 효율을 고려해서 스케쥴링하게되면 더 좋을 것 같다.
+어느정도 공감이 됐다. 첫 직장을 퇴사하고 시간이 꽤 흘렀는데, 알고리즘 공부나 프로그래밍 기법등 공부도 잠시 했었고, kaggle 로 사이드 프로젝트도 해봤지만 하고 싶은 일을 한다기 보다는 이직을 준비하기 위해 해야되는 것들로 생각했던 것 같다. 거기서 한발짝 더 할 일들을 찾아나가지 못했다.   
+graphics 관련 공부를 하고 Vulkan API 관련 tutorial와 예제 구현, 블로그 정리들을 하면서는 어떻게든 다음 step을 찾게 된다. 이 tutorial을 끝내면, 이 lecture를 끝내면, 이 예제구현을 끝내면 다음에 뭘 할지 어느샌가 다음에 하고 싶은 것을 리스트업해놓게 되고 느리더라도 그 다음 스텝으로 넘어갈 수 있게 됐다.  
+공백기간이 길어지니 준비할 방향을 잘못 잡은 것은 아닌지, 하고싶은 일을 찾는다는 생각이 오히려 기회를 좁히고 있는 것은 아닌지 하는 의심들도 들지만 이럴때 일 수록 중심을 단단하게 가져가자. 앞으로는 속도와 효율을 고려해서 스케쥴링하게되면 더 좋을 것 같다.
 
-또 다른 얘기인데, 예전에 누가 청소하는 법을 알려준 적이 있는데 그게 생각이났다.  
-> 매번 똑같은 청소를 하더라도 똑같은 부분만 하는게 아니라, 지난번 청소하지 않은 구석 창틀을 오늘 청소하고, 다음에는 또 어딘가 구석의 건들지 않은 부분을 청소해 나가야 한다는 말이었다. 큰 복도 가운데, 방 한가운데만 닦고 청소를 끝내면 매일 깨끗해진 것 같다고 착각하면서 구석에는 먼지가 더 쌓이게 될 수 있다는 것이다.
-
-이번 내용을 정리하면서도 느꼈다. 몇번 본 키워드나 내용이라고 다 안다고 생각하고 넘어가거나, 더 자세히 다루기에는 무리라고 생각하고 넘어가면 평생 그 부분을 건들지 않을 것이다. 한번씩 마주쳤을 때, 조금이라도 새로운 내용이나 건들지 않았던 것들을 건드려주면 깨끗한 구역을 늘려갈 수 있지 않을까?  
-그리고 나는 그 구석을 건드릴 수 있는 능력과 여건이 충분히 된다. 단지 핑계를 만들며, 익숙해진 편한 방식들을 추구하는 건 아닐지 경계심이 들었다.   
