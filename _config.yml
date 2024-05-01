@@ -92,7 +92,7 @@ jekyll-spaceship:
     - mermaid-processor
     # - polyfill-processor
     - media-processor
-    - emoji-processor
+    # - emoji-processor -> error for plotly
     # - element-processor
 
 # Front Matter Defaults
