@@ -42,7 +42,6 @@ image:
 ![image](/images/vge-cloth/vge-cloth-26.png)
 
 
-![image](/images/vge-cloth/ex-cloth-0-low.gif)
 ![image](/images/vge-cloth/ex-cloth-1-low.gif)
 ![image](/images/vge-cloth/ex-cloth-2-low.gif)
 ![image](/images/vge-cloth/ex-cloth-3-low.gif)
