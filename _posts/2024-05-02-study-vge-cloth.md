@@ -1,5 +1,5 @@
 ---
-title: "[WIP] Vulkan Graphics Examples - Cloth"
+title: "Vulkan Graphics Examples - Cloth"
 date: 2024-05-02T15:00:00
 categories: 
   - study
@@ -30,6 +30,7 @@ image:
     - [Demo](#demo)
     - [TODOs \& Not TODOs](#todos--not-todos)
 - [마무리](#마무리)
+  - [근황](#근황)
 
 
 # Theoretical Background
@@ -39,12 +40,11 @@ PBD에서의 시뮬레이션 모델을 다루기 전에, 기존 example repo에�
 
 ## Existing example implementation
 
-[Vulkan/examples/computecloth/computecloth.cpp at master · SaschaWillems/Vulkan (github.com)](https://github.com/SaschaWillems/Vulkan/blob/master/examples/computecloth/computecloth.cpp)
+참고한 SaschaWillems Vulkan example 코드
+- [Vulkan/examples/computecloth/computecloth.cpp at master · SaschaWillems/Vulkan (github.com)](https://github.com/SaschaWillems/Vulkan/blob/master/examples/computecloth/computecloth.cpp)
+- [Vulkan/shaders/glsl/computecloth/cloth.comp at master · SaschaWillems/Vulkan (github.com)](https://github.com/SaschaWillems/Vulkan/blob/master/shaders/glsl/computecloth/cloth.comp)
 
-[Vulkan/shaders/glsl/computecloth/cloth.comp at master · SaschaWillems/Vulkan (github.com)](https://github.com/SaschaWillems/Vulkan/blob/master/shaders/glsl/computecloth/cloth.comp)
-
-이 예제에서는 cloth를 grid 형태의 particles로 보고, 이 particle 간의 상호작용을 compute shader에서 계산한다.
-
+이 예제에서는 cloth를 grid 형태의 particles로 보고, 이 particle 간의 상호작용을 compute shader에서 계산한다.  
 - cloth model: 간단한 grid 형태만 다루기 때문에, 별도의 cloth model을 load 하지 않고, 직접 grid의 particle position을 지정해서 생성한다. 
   - 우리는 이후 더 복잡한 형태의 옷을 다룰 것을 염두해 두고 gltf model로 cloth 구조를 불러오려 한다. (일단은 동일한 grid 형태의 간단한 구조만 먼저 추가하긴 할 계획이다.) 기존 animation에서 다뤘던 gltf load 구조를 그대로 사용하되, ssbo 중 vertex buffer는 사용하지 않고, index buffer만 사용하는 식으로 이용할 계획이다. model의 texture 등은 그대로 쓰면 된다.
 - SSBO
@@ -147,11 +147,11 @@ cloth self-collision은 어려운 문제중 하나다.
   - 속도가 너무 커지면 substepping에도 불구하고 충돌을 놓치게 된다고 함.
   - max vel을 r / t_substep 정도로 지정하면 좋다고 함.
 - unconditionally stable cloth-cloth friction 기법
-  - damping coefficient를 넣어서 overshoot 하지 않도록 처리하는 기법
+  - damping coefficient를 넣어서 overshoot 하지 않도록 처리하는 기법  
 
 
 실제로 cloth simulation을 구현해보니, 이 self-intersection처리가 왜 중요한지 알게 됐다. 
-기본적인 stretch, bending, shearing 등 constraint를 구현하면 아주 간단한 dynamic만 확인이 가능한데, cloth가 중력으로 인해 펼쳐지거나 흔들리는 정도이다. cloth와 animating model이나, mouse interaction을 추가했을 때, cloth가 꼬이거나, 한쪽 끝이 cloth를 통과하는 등 문제가 생기면 아예 현실적인 느낌이 들지 않았아서 이런 처리를 위한 기법이 왜 중요한지 느꼈다.
+기본적인 stretch, bending, shearing 등 constraint를 구현하면 아주 간단한 dynamic만 확인이 가능한데, cloth가 중력으로 인해 펼쳐지거나 흔들리는 정도이다. cloth와 animating model이나, mouse interaction을 추가했을 때, cloth가 꼬이거나, 한쪽 끝이 cloth를 통과하는 등 문제가 생기면 아예 현실적인 느낌이 들지 않았아서 이런 처리를 위한 기법이 왜 중요한지 느꼈다.  
 여기서 소개한 trick들이 단순한 편이겠지만 self-intersection이 다른 constraint와 다르게 하나의 fancy 한 방식으로 처리되는게 아니라, 여러가지 기법을 중첩시켜 해결해야되는 문제라는 정도를 이해하고 넘어갔다.
 
 
@@ -211,7 +211,7 @@ integration
 
 구현
 - python구현 코드 구조를 보고 많은 부분을 참고했다.
-- warp에서는 launch나 copy 등은 synch가 implicit하게 맞춰진다고 한다. (GPU-CPU synch https://github.com/NVIDIA/warp)
+- warp에서는 launch나 copy 등은 synch가 implicit하게 맞춰진다고 한다. (GPU-CPU synch [https://github.com/NVIDIA/warp](https://github.com/NVIDIA/warp))
 - distConstIds에 두 v index를 pass별로 나눠서 전부 저장해놓고 하나의 ssbo로 전달한다고 볼 수 있다.
 - 이 ssbo는 read only로 둬도 될 것 같은데, 초기 rest length 계산을 gpu에서 해주려면 write가 필요하다.
 
@@ -267,26 +267,28 @@ compute
 처음 cloth 데이터를 load 하고, 정지된 texture를 render하는 부분을 구현했다.
 이후 바로 자원 생성하는 부분 작업을 해준 후, compute shader 에서 gravity에 영향 받는 부분을 작성했는데, 다음 이미지 처럼 particle 좌표가 이상하게 변동됐다. 
 
-![image](/images/vge-cloth/vge-cloth-1.png)
 
-render doc을 열어서 particle buffer의 값들을 확인해보니 buffer에 데이터가 밀려들어가 있었고, 확인해보니 alignment 관련된 문제여서 수정할 수 있었다.
 
-![image](/images/vge-cloth/vge-cloth-2-2.png)
 
-![image](/images/vge-cloth/vge-cloth-2-1.png)
 
-![image](/images/vge-cloth/vge-cloth-0.png)
+|                                               |                                                                                                                                                                                                                  |
+| :-------------------------------------------: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|  ![image](/images/vge-cloth/vge-cloth-1.png)  | render doc을 열어서 particle buffer의 값들을 확인해보니 buffer에 데이터가 밀려들어가 있었고, 확인해보니 alignment 관련된 문제여서 수정할 수 있었다.                                                              |
+| ![image](/images/vge-cloth/vge-cloth-2-2.png) | pos 나 normal의 .w 부분을 보면 1이 들어있어야하는데, 다른 값들이 들어있는 것이 보인다. <br> structure 형태의 data를 가지는 buffer의 값을 보기위해서는 format을 지정해줘야 하는데, 코드에 맞춰서 하단에 적어줬다. |
+| ![image](/images/vge-cloth/vge-cloth-2-1.png) | vertex buffer의 attribute 들은 위 처럼, vertex index와 함께 어떤 vertex가 render 되고 있는지를 같이 볼 수 있다.                                                                                                  |
+|  ![image](/images/vge-cloth/vge-cloth-0.png)  | alignment 관련 수정을 해준 후, compute SSBO로 지정해준 pos와 normal, uv 등이 의도대로 설정되어서 rendering 시 원하는 texture와 vertex 형태가 나오게 됐다.                                                        |
+|                                               |
+
+
+
 
 ## Constraint compute
 
 dispatch call 관련해서 처음에 size 관련된 오류가 발생했다.
 이와 관련된 여러 limit이나 숫자들이 있는데, 내용을 좀 정리해두려 한다.
-
-
-https://stackoverflow.com/questions/68653519/maximum-number-of-threads-of-vulkan-compute-shader
-
-https://www.khronos.org/opengl/wiki/Compute_Shader
-
+- 참고 검색 자료
+  - [https://stackoverflow.com/questions/68653519/maximum-number-of-threads-of-vulkan-compute-shader](https://stackoverflow.com/questions/68653519/maximum-number-of-threads-of-vulkan-compute-shader)
+  - [https://www.khronos.org/opengl/wiki/Compute_Shader](https://www.khronos.org/opengl/wiki/Compute_Shader)
 - 한 dispatch call 한번에 여러 work group의 dimension이 명시된다.
   - 각 work group에는 work item 여러개 (invocation)들이 실행될 것이다.
   - 예를들어 `dispatch(num_verts/256+1, 1, 1)` 이런 호출에서 `num_verts` 가 2560이라고 가정해보자
@@ -305,35 +307,18 @@ https://www.khronos.org/opengl/wiki/Compute_Shader
 이후 model의 각 vertex와 일정 거리를 유지하는 간단한 collision 처리를 구현해서 dispatch했다. 
 x를 cloth particle, y를 model vertex로 mapping 해서 호출했는데, 충돌 처리가 아예 적용되지 않는 문제가 생겼다.
 
-먼저 render doc에서 compute pipeline debugging 기능을 사용해서, distance가 일정 거리 이내엔 condition에 들어오는지를 확인했는데, 아예 분기로 들어오는 경우가 없었다.
-그래서 거리 값을 normal의 w에 넣어 값을 확인해봤다. 
-![image](/images/vge-cloth/vge-cloth-2.png)
-
-normal의 w에 보이듯 거리가 전부 예상보다 큰 값이 들어있어서 각 좌표를 확인해봤다.
-
-확인 결과 모델 vertex의 좌표가 변환되지 않은채였는데, model matrix는 animation에서 곱해주지 않고, vertex shader에서 곱하도록 이전에 구현했던 부분이 원인으로 파악됐다. (이전에 NOTE를 써놔서 다행이다.)
-
-vertex shader에서 compute shader로 model mat 적용을 옮겨주니 지정한 거리 이내에 들어왔을 때 처리되는 것을 확인했다.
-
-![image](/images/vge-cloth/vge-cloth-3.png)
-
-아직 normal update가 따로 없어서 눈으로 확인하기 한계가 있다. 하지만 단순한 collision 처리이기에 모델과 cloth가 뚫고 들어가는 현상은 확인했다. 
-
-normal 관련 구현 전 까지는 wireframe 형태로 확인하는게 더 잘 보였다. 
-![image](/images/vge-cloth/vge-cloth-4.png)
-
-normal과 관련해서는, gltf export 시 normal을 포함하지 않도록 해서, 같은 position을 가지면 하나의 vertex가 되도록 내보내서 사용했다.
 
 
-이후 distance constraint 부분을 compute shader에 추가해줬는데, 일부 pos에 nan 값이 들어있어서 비어있게 보이는 문제가 발생했다. 
+|                                                                                                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| :--------------------------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|                                            ![image](/images/vge-cloth/vge-cloth-2.png)                                             | 먼저 render doc에서 compute pipeline debugging 기능을 사용해서, distance가 일정 거리 이내엔 condition에 들어오는지를 확인했는데, 아예 분기로 들어오는 경우가 없었다. <br> 그래서 거리 값을 normal의 w에 넣어 값을 확인해봤다. <br> normal의 w에 보이듯 거리가 전부 예상보다 큰 값이 들어있어서 각 좌표를 확인해봤다. <br> 확인 결과 모델 vertex의 좌표가 변환되지 않은채였는데, model matrix는 animation에서 곱해주지 않고, vertex shader에서 곱하도록 이전에 구현했던 부분이 원인으로 파악됐다. (이전에 NOTE를 써놔서 다행이다.) |
+|                                            ![image](/images/vge-cloth/vge-cloth-3.png)                                             | vertex shader에서 compute shader로 model mat 적용을 옮겨주니 지정한 거리 이내에 들어왔을 때 처리되는 것을 확인했다. <br> 아직 normal update가 따로 없어서 눈으로 확인하기 한계가 있다. 하지만 단순한 collision 처리이기에 모델과 cloth가 뚫고 들어가는 현상은 확인했다.                                                                                                                                                                                                                                                           |
+|                                            ![image](/images/vge-cloth/vge-cloth-4.png)                                             | normal 관련 구현 전 까지는 wireframe 형태로 확인하는게 더 잘 보였다.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+|                                            ![image](/images/vge-cloth/vge-cloth-5.png)                                             | normal과 관련해서는, gltf export 시 normal을 포함하지 않도록 해서, 같은 position을 가지면 하나의 vertex가 되도록 내보내서 사용했다. 이렇게 구성된 모델을 쓰고, normal 계산은 이후 compute shader에서 직접해주는 방식으로 구현했다. <br> compute 과정에서는 간단한 collision handle만 추가해줘서, 모델의 vertex들과 일정 거리안에 들지 않도록 처리된 모습이다.                                                                                                                                                                     |
+|                                            ![image](/images/vge-cloth/vge-cloth-6.png)                                             | 이후 distance constraint 부분을 compute shader에 추가해주기 전에, particle 정보를 initialize 하는 부분을 cpu에서 하고 ssbo로 copy 해주는 부분을 변경했다. <br>                                                                                                                                                                                                                                                                                                                                                                    |
+| 아직 constraint 초기화에서 rest length 계산은 cpu에 있는 상태인데, 일부 pos에 nan 값이 들어있어서 비어있게 보이는 문제가 발생했다. |
+|                                            ![image](/images/vge-cloth/vge-cloth-7.png)                                             | ^^ 원인은 초기화 되지 않은 값이 pos에 들어가서 사용된 것이었다. prevPos attribute를 shader에서 초기화 해주는 부분이 빠져서 발생한 문제여서 쉽게 수정 가능했다.                                                                                                                                                                                                                                                                                                                                                                    |
 
-![image](/images/vge-cloth/vge-cloth-5.png)
-
-![image](/images/vge-cloth/vge-cloth-6.png)
-원인은 초기화 되지 않은 값이 사용된 것이었다.
-
-
-![image](/images/vge-cloth/vge-cloth-7.png)
 
 
 constraint를 전달할 때, solve type (Jacobi or Gauss-Seidel) 정보는 각 constraint 별로 저장하지 않았고, constraint의 index 범위를 나눠서 pass에 저장해둔 independence 여부로 구분했다. 
@@ -356,21 +341,18 @@ distance constraints를 처음 적용했을 때, 이상한 결과가 나왔다.
 - rest length check
 - solve dist constraint 과정 디버깅
 
-rest length 계산은 초기화 부분에서 compute shader에서 계산하는데, 이부분을 render doc에서 capture 해서 확인했다.
+rest length 계산은 처음에는 cpu에서 진행하다가, 초기화 부분을 particle 과 마찬가지로 compute shader에서 계산하도록 옮겨주었고, 이부분을 render doc에서 capture 해서 확인했다.
 
-![image](/images/vge-cloth/vge-cloth-8.png)
+|                                              |                                                                                                                                                                                                                                                                                                  |
+| :------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![image](/images/vge-cloth/vge-cloth-8.png)  | distance constraint 추가 후, 각 particle 거리가 rest length로 유지되도록 stretch constraint가 적용된 모습이다. 하지만 잘못된 거리가 들어가있는 결과이다. <br>처음에는 simulation의 float이 precision 문제가 있는 것으로 생각해서 double precision으로 늘려봤지만, 문제가 해결되지 않아 되돌렸다. |
+| ![image](/images/vge-cloth/vge-cloth-9.png)  | 초기화 과정을 render doc에서 캡쳐하기 위해서는 직접 frame을 지정해서 launch가 가능하다.                                                                                                                                                                                                          |
+| ![image](/images/vge-cloth/vge-cloth-10.png) | constraint ssbo의 데이터 값인데, 앞 두개는 id0, id1을 마지막 항목이 rest length distance를 저장하고 있어야 한다. 이때 5.45라는 예상되지 않은 값이 들어있는 것을 확인했다.                                                                                                                        |
+| ![image](/images/vge-cloth/vge-cloth-11.png) | 디버깅과 buffer 내용을 보고 모델의 vertex index가 의도와 다르게 정렬됐다는 사실을 알게됐다. <br> 해당 index에 맞는 vertex를 blender를 열어서 확인했다. 의도된 순서라면 y로 먼저 정렬하고, 같은 y는 x 순으로 정렬되어 있어야 하는데, 그렇지 않았다.                                               |
+| ![image](/images/vge-cloth/vge-cloth-12.png) | blender에 추가했던 model의 vertex index를 정렬하는 파이썬 스크립트에서 해당 부분의 (-y, x)를 출력해봤다. <br> blender에서 position float의 precision문제로 제대로 정렬이 안됐던 문제였고, 이를 4자리 까지로 줄여서 문제가 사라진 것을 확인했다.                                                  |
 
-![image](/images/vge-cloth/vge-cloth-9.png)
+아래는 사용한 blender script 이다.  
 
-![image](/images/vge-cloth/vge-cloth-10.png)
-
-![image](/images/vge-cloth/vge-cloth-11.png)
-
-디버깅과 buffer 내용을 보고 모델의 vertex index가 의도와 다르게 정렬됐다는 사실을 알게됐다. 
-
-![image](/images/vge-cloth/vge-cloth-12.png)
-
-blender python script로 구현한 내용인데, blender에서 position float의 precision문제로 제대로 정렬이 안됐던 문제였고, 이를 4자리 까지로 줄여서 문제가 사라진 것을 확인했다.
 
 ```python
 # https://blender.stackexchange.com/questions/36577/how-are-vertex-indices-determined/36619#36619
@@ -426,11 +408,13 @@ print(bm.verts[300].co)
 
 확인을 위해 normal vector update를 flat shading 과 average normal을 써서 smooth shading이 되도록 두가지 옵션을 구현했다.  
 
-![image](/images/vge-cloth/vge-cloth-13.png)
-
-![image](/images/vge-cloth/vge-cloth-14.png)
+|                                              |                                              |
+| :------------------------------------------: | :------------------------------------------: |
+| ![image](/images/vge-cloth/vge-cloth-13.png) | ![image](/images/vge-cloth/vge-cloth-14.png) |
 
 ### stretch constraint demo
+
+stretch constraint (grid 형태에서 인접한 두 particle 간 rest length 만 유지되도록 하는 constraint)만 추가한 모습이다. bending이나 shear는 빠져있으서 실제 cloth와는 이질감이 드는 부분이 있을 수 있지만 어느정도 눈에 보이는 결과를 얻기 시작했다.  
 
 ![image](/images/vge-cloth/ex-cloth-7-stretch.gif)
 
@@ -444,26 +428,23 @@ vulkan에는 instance extension도 (device extension)있는데 이와 헷갈렸�
 - instance extension은 vulkan loader support가 필요한 것들이고, graphics card와는 독립적인 개념이다. loader는 vulkan api에 포함된 내용.
 - device extension을 사용하려면, physical device가 그 기능을 support 하는지 먼저 확인하고, logical device 생성할 때 명시하면 된다.
 - validation layer 사용시 debug extension을 추가하는 내용 샘플
-  - https://github.com/KhronosGroup/Vulkan-Hpp/blob/main/samples/PhysicalDeviceFeatures/PhysicalDeviceFeatures.cpp
-- https://docs.vulkan.org/guide/latest/enabling_features.html#enabling-features
-- https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceShaderAtomicFloatFeaturesEXT.html
+  - [https://github.com/KhronosGroup/Vulkan-Hpp/blob/main/samples/PhysicalDeviceFeatures/PhysicalDeviceFeatures.cpp](https://github.com/KhronosGroup/Vulkan-Hpp/blob/main/samples/PhysicalDeviceFeatures/PhysicalDeviceFeatures.cpp)
+- [https://docs.vulkan.org/guide/latest/enabling_features.html#enabling-features](https://docs.vulkan.org/guide/latest/enabling_features.html#enabling-features)
+- [https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceShaderAtomicFloatFeaturesEXT.html](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkPhysicalDeviceShaderAtomicFloatFeaturesEXT.html)
 
 atomic add 가 지원되지 않을때, 그냥 프로그램을 종료해도 되는데, 우회할 수 있는 방법이 있을지 조금 확인을 해봤다.
 
 atomic load/store나 atomic exchange는 사용이 가능해서 이 operation들을 잘 사용하면 glsl 상에서 해결 가능한 방법이 있지 않을까 싶어서 찾아보던 중, spinlock을 구현해서 사용하는 방법이 있어 추가해봤다.
 
-결론부터 말하면 실행은 확인했는데, 코드 구조에 따라서 결과가 이상한 경우도 있었고, (compiler optimizer에 의해서 뭔가 달라지는 것 같음), invocation들의 execution order를 지정해주려는 방식 자체가 공식 spec에 undefined behavior라는 의견도 있었다. 
-
-https://www.gamedev.net/forums/topic/681459-compute-shader-memory-barrier-fun/5306851/?page=1
-
-https://community.khronos.org/t/using-spinlock-to-control-image-read-writes/69299
-
-https://stackoverflow.com/questions/51704683/glsl-per-pixel-spinlock-using-imageatomiccompswap
+결론부터 말하면 실행은 확인했는데, 코드 구조에 따라서 결과가 이상한 경우도 있었고, (compiler optimizer에 의해서 뭔가 달라지는 것 같음), invocation들의 execution order를 지정해주려는 방식 자체가 공식 spec에 undefined behavior라는 의견도 있었다.  
+- [https://www.gamedev.net/forums/topic/681459-compute-shader-memory-barrier-fun/5306851/?page=1](https://www.gamedev.net/forums/topic/681459-compute-shader-memory-barrier-fun/5306851/?page=1)
+- [https://community.khronos.org/t/using-spinlock-to-control-image-read-writes/69299](https://community.khronos.org/t/using-spinlock-to-control-image-read-writes/69299)
+- [https://stackoverflow.com/questions/51704683/glsl-per-pixel-spinlock-using-imageatomiccompswap](https://stackoverflow.com/questions/51704683/glsl-per-pixel-spinlock-using-imageatomiccompswap)
 
 구현한 내용은 다음과 같다.
 - shared data를 하나 둬서 spinlock으로 쓴다 (여러개 둬도 될 것 같음)
 - 실제로 병렬로 실행되는 thread 개념이 subgroup 단위인데, 이 subgroup은 한 local work group 내에서 나눠진 것임
-  - https://www.khronos.org/blog/vulkan-subgroup-tutorial
+  - [https://www.khronos.org/blog/vulkan-subgroup-tutorial](https://www.khronos.org/blog/vulkan-subgroup-tutorial)
 - 결국 동시에 실행되는 단위나 접근은 local work group 내에서만 신경쓰면 된다고 생각해서 이를 공유하는 shared data를 spinlock으로 써서 하나의 invocation만 critical area에 접근하도록 atomic exchange로 감싸줬음.
   - atomic 연산에 memory scope와 semantics 개념이 들어가는데,
   - scope: atomicity를 지켜야할 shader invocation들의 범위
@@ -473,25 +454,26 @@ https://stackoverflow.com/questions/51704683/glsl-per-pixel-spinlock-using-image
     - relaxed, acquire, release, acquire release
     - storage semantic
       - buffer, shared, image, output
-  - https://registry.khronos.org/vulkan/specs/1.3-extensions/html/chap53.html#memory-model-scope
-  - https://github.com/KhronosGroup/GLSL/blob/main/extensions/khr/GL_KHR_memory_scope_semantics.txt
+  - [https://registry.khronos.org/vulkan/specs/1.3-extensions/html/chap53.html#memory-model-scope](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/chap53.html#memory-model-scope)
+  - [https://github.com/KhronosGroup/GLSL/blob/main/extensions/khr/GL_KHR_memory_scope_semantics.txt](https://github.com/KhronosGroup/GLSL/blob/main/extensions/khr/GL_KHR_memory_scope_semantics.txt)
 
 
 atomic operation 관련한 개념을 좀 더 살펴보는 계기가 됐는데, 기능적으로 이런 spinlock을 invocation들의 순서를 강제하기 위해 shader 내부에서 쓰는 것은 지양해야하는 방식인 것 같아 실험적으로 구현해본 것에 의의를 두고 넘어갔다.
 
-![image](/images/vge-cloth/vge-cloth-15.png)
 
-fragment shader에서 texture를 쓰는 대신,
-back face 구분도 지정해줬다.
-![image](/images/vge-cloth/vge-cloth-16.png)
 
-normal  관련 initialize 오류를 수정해준 최종 모습
+|                                              |                                                                                                                                                                                                    |
+| :------------------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![image](/images/vge-cloth/vge-cloth-15.png) | atomic add 관련 제대로된 처리가 안되어 있을때는, normal이 계속 바뀌면서 밝기가 flickering 하는 현상이 있었는데, 사라진 모습니다. <br> 하지만 normal에 의한 밝기가 미묘하게 밝은 듯 한 느낌이 있다. |
+| ![image](/images/vge-cloth/vge-cloth-16.png) | fragment shader에서 texture를 쓰는 대신, back face 구분도 지정해줬다.                                                                                                                              |
+| ![image](/images/vge-cloth/vge-cloth-17.png) | normal  관련 initialize를 제대로 해주지 않는 오류가 있어서 수정해주고 나니, 이전 보다 더 명확한 면들의 밝기 차이를 볼 수 있었다.                                                                   |
 
-![image](/images/vge-cloth/vge-cloth-17.png)
+
+
 
 ## Mouse Ray casting interaction
 
-fixed point는 임시로 hard-coding 된 형태로 inv mass를 0.0으로 줘서 동작을 확인했다.
+fixed point는 임시로 hard-coding 된 형태로 inv mass를 0.0으로 줘서 동작을 확인했다. (상단 좌우 두 점을 고정했다.)
 
 이후 mouse interaction은 계획대로 GPU 상에서 삼각형과 barycentric coords 계산을 통해 처리했다.
 
@@ -506,10 +488,10 @@ fixed point는 임시로 hard-coding 된 형태로 inv mass를 0.0으로 줘서 
   - 사실 이 부분 구현을 어디에 둬야하는지 고민이 좀 됐는데, 우선 간단하게 구현하는 대신 compute queue가 매 frame 계산되길 기다려야하므로 double buffering 구현 목표와 상충되게 됐다.
   - 이 부분을 제대로 구현하려면 async compute 관련 구현을 먼저 익혀야할 것 같은데, 이후 새로운 주제로 알게되면 다시 언급할 예정이다. 
 
+|                                              |                                              |
+| :------------------------------------------: | :------------------------------------------: |
+| ![image](/images/vge-cloth/vge-cloth-18.png) | ![image](/images/vge-cloth/vge-cloth-19.png) |
 
-![image](/images/vge-cloth/vge-cloth-18.png)
-
-![image](/images/vge-cloth/vge-cloth-19.png)
 
 ## Geometry shader
 
@@ -529,17 +511,18 @@ geometry shader는 입력으로 primitive를 받아서 새로운 primitives를 �
 - 이번에는 vertex 하나를 두개의 vertex primitive로 보내서 normal line을 만들때 쓴다.
 - geometry shader stage는 vertex shader stage와 raterization 사이에서 일어나는데, tesselation shader와 유사하지만 더 유연하다고 한다.
 
-![image](/images/vge-cloth/vge-cloth-21.png)
+|                                              |                                                                                                                    |
+| :------------------------------------------: | :----------------------------------------------------------------------------------------------------------------: |
+| ![image](/images/vge-cloth/vge-cloth-21.png) |             smoothing shading을 위한 normal을 시각화 한 것. <br> normal이 한 vertex에 하나 씩만 있다.              |
+| ![image](/images/vge-cloth/vge-cloth-22.png) | flat shading을 위한 경우는, 각 triangle 면 마다 normal이 있어야 하므로, 한 vertex당 최대 6개 까지 normal이 보인다. |
 
-![image](/images/vge-cloth/vge-cloth-22.png)
 
-
-normal에는 문제가 없는것을 눈으로 확인했다. 
-혹시 모를 미세한 수치차이로 인한것인지 의심되어 interpolation qualifier 관련된 문제가 있는지 찾아봤지만 비슷한 케이스를 찾지 못했따.
-https://www.khronos.org/opengl/wiki/Type_Qualifier_(GLSL)#Fragment_shader_outputs 
+normal에는 문제가 없는것을 눈으로 확인했다.  
+혹시 모를 미세한 수치차이로 인한것인지 의심되어 interpolation qualifier 관련된 문제가 있는지 찾아봤지만 비슷한 케이스를 찾지 못했다.
+- [https://www.khronos.org/opengl/wiki/Type_Qualifier_(GLSL)#Fragment_shader_outputs](https://www.khronos.org/opengl/wiki/Type_Qualifier_(GLSL)#Fragment_shader_outputs)
 
 shaing 방식의 한계인지도 모르겠어서 검색해본 결과 비슷한 예시를 찾았다. 
-https://stackoverflow.com/questions/38070899/how-to-interpolate-normals-for-phong-shading-in-opengl 
+- [https://stackoverflow.com/questions/38070899/how-to-interpolate-normals-for-phong-shading-in-opengl](https://stackoverflow.com/questions/38070899/how-to-interpolate-normals-for-phong-shading-in-opengl)
 
 답변에는 slerp 관련 문제라고 하는데, 결국 normal 각도가 너무 커서 rasterize에서 interpolation시 오차가 발생한 것으로 설명한다.  
 
@@ -551,53 +534,73 @@ https://stackoverflow.com/questions/38070899/how-to-interpolate-normals-for-phon
 
 
 ## Results & Further study
+최종 결과로 확인한 장면들이고, 아래 demo에 해당 영상을 넣어놨다.  
 
-![image](/images/vge-cloth/vge-cloth-24.png)
-
-![image](/images/vge-cloth/vge-cloth-25.png)
-
-![image](/images/vge-cloth/vge-cloth-26.png)
+|                                              |                                                  |
+| :------------------------------------------: | :----------------------------------------------: |
+| ![image](/images/vge-cloth/vge-cloth-24.png) | 상단 두 점을 fix 해놓고 model과 collision한 모습 |
+| ![image](/images/vge-cloth/vge-cloth-25.png) |    fox model animation 위로 떨어진 cloth 모습    |
+| ![image](/images/vge-cloth/vge-cloth-26.png) |     정지된 사과 모델 위로 떨어진 cloth 모습      |
 
 ### Demo
 
-options
-![image](/images/vge-cloth/ex-cloth-1-low.gif)
 
-wireframe and backface
-![image](/images/vge-cloth/ex-cloth-2-low.gif)
+|                                                |                                                                                                                                 |
+| :--------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------------------: |
+| ![image](/images/vge-cloth/ex-cloth-1-low.gif) |                                                    option들을 변경하는 장면                                                     |
+| ![image](/images/vge-cloth/ex-cloth-2-low.gif) |                                                    wireframe 전환과 backface                                                    |
+| ![image](/images/vge-cloth/ex-cloth-3-low.gif) |                                                     mouse drag interaction                                                      |
+| ![image](/images/vge-cloth/ex-cloth-4-low.gif) |                                              geometry shader for normal debugging                                               |
+| ![image](/images/vge-cloth/ex-cloth-5-low.gif) |                                                single animating model collision                                                 |
+| ![image](/images/vge-cloth/ex-cloth-6-low.gif) | two animating model collision  <br> cloth의 self intersection이 구현되어 있지 않아 cloth가 꼬이도록 mouse interaction도 넣었다. |
+|   ![image](/images/vge-cloth/ex-cloth-8.gif)   |                                         stationary model and animating model collision                                          |
 
-mouse drag interaction
-![image](/images/vge-cloth/ex-cloth-3-low.gif)
 
-geometry shader for normal debugging
-![image](/images/vge-cloth/ex-cloth-4-low.gif)
 
-single animating model collision
-![image](/images/vge-cloth/ex-cloth-5-low.gif)
 
-two animating model collision
-![image](/images/vge-cloth/ex-cloth-6-low.gif)
-
-stationary model and animating model collision
-![image](/images/vge-cloth/ex-cloth-8.gif)
 
 ### TODOs & Not TODOs
 
 - self-collision
-  - 이건 좀 더 자연스러운 cloth simulation 결과를 위해서는 꼭 해봐야 할 주제다. 언제 할지는 모르겠다.
+  - 이건 좀 더 자연스러운 cloth simulation 결과를 위해서는 꼭 해보고 싶은 주제다. 
+  - 기법에 대해 간단히 lec 15에서 봤을때는, 하나의 일관적인 method가 있다기 보다는 성능을 고려하면서 시각적으로 만족할 만한 결과를 얻기 위한 trick들을 쓰는 것으로 이해했기 때문에 좀 더 실질적인 필요가 있을 때 구현을 해볼 것 같다.
 - optimize
-  - 간단한 cloth model인데도 성능이 잘 안나오게 구현한 부분이 많다. 특히 collision 관련한 부분은 너무 기초적이라 결과도 안좋고 성능도 안좋다. 바로 이 코드를 개선할 생각은 없고 이후에 새로운 내용들을 공부하고 얻은 지식을 활용해볼 수 있으면 적용할 것 같다.
+  - 간단한 cloth model인데도 성능이 잘 안나오게 구현한 부분이 많다. 특히 collision 관련한 부분은 너무 기초적이라 결과도 안좋고 성능도 안좋다. 
+  - 바로 이 코드를 개선할 생각은 없고 이후에 새로운 내용들을 공부하고 얻은 지식을 활용해볼 수 있으면 적용할 것 같다.
 - multiple cloth simulation
   - 구조를 계획할 때 좀 더 다양한 경우를 계획해놨는데, 구현하다보니 여러 한계로 우선 미구현인채로 마치게됐다. 성능 optimize를 하게되면 그때 좀 더 다양한 interaction을 추가할 것 같다.
+  - cloth patch 간의 연결과 여러 animation model과의 interaction을 구현전에 구조상 계획을 해뒀기 때문에 코드 구조적인 변경이 크게 필요하지는 않을 것 같다.
+  -  좀 더 복잡한 cloth에 대한 simulation을 해볼 동기가 생기면 해볼 것 같다.
 - improve model collision 
-  - 이부분은 collision handle에 대한 내용을 먼저 별도의 주제로 익히고나면 추가할 것 같다.
+  - 이부분은 collision handle에 대한 내용을 먼저 별도의 주제로 익히고나면 추가하려 한다. 
+  - 당장 cloth simulation에 포함시키기에는 주제가 너무 넓어진다고 생각한다.
 
   
+초기에 구현하려 계획했던 부분들보다 상당히 축소된 기본 기능만 구현한 채로 마무리하게 되어서 TODO 보다 Not TODO가 더 많게 되어 찝찝한 느낌이 많이 남는다.  
+조급하게 당장 해봐야 할 것들로 생각하지 말고, 좀 더 주제를 세분화해서 다뤄야 이 TODO 목록들을 채워나갈 수 있을 것 같다.
 
 # 마무리
 
-deferred rendering
+이전에 vulkan api 관련 공부를 시작하면서 초기부터 compute shader나 이런 simulation 예제를 보고 나도 만들어보고 싶다고 생각했었다.  
+몇가지 예시를 구현해보니 확실히 재미도 있고, 눈에 보이는 것 외에 훨씬 많은 어려움이 뒤에 숨어 있다고 느꼈다.  
+원래는 이직 준비를 하는 겸, 관심있던 computer graphics 의 기본적인 개념을 학습하고자했던 의도로 생각하면 이런 예제들을 다듬게 되면서 소요되는 시간이 예상보다 더 오래 걸려서 학습해야할 주제들을 많이 커버하지 못한다고 느꼈다. 정작 관심있던 채용 포지션 중에 지원하지 못했던 것 들도 이나 하지 않았던 것들도 있고, 면접 과정에서 생각보다 내가 공부하고 있는 속도나 커버리지가 graphics engineer가 요구하는 커버리지에 부족한 점들도 있는 것 같았다. (물론 몇몇 포지션과는 준비한 방향성에서 차이가 있음을 느끼기도 했다.) 
+면접 준비와 면접 과정에서 몇가지 주제는 좀 우선적으로 다뤄봐야겠다고 느낀 것이 있는데, 다음 항목들이고 앞으로 우선적으로 다뤄보려고 한다.
+- deferred rendering
+- depth-stencil
+- multi-thread command buffer
 
-depth-stencil
+## 근황
 
-multi-thread command buffer
+최근 이직을 하고나서 원래 진행하던 이 cloth simulation 주제를 끝마치고 블로그에 올리기 위한 자료나 글 정리만을 하고 있었는데, 이것만으로도 몇주가 지나간 것 같다. 이렇게 주말 등의 시간을 쪼개서 조금씩 글을 추가하고 있었는데, 오늘이 돼서야 어느정도 초안을 마무리하고 올리게 돼서 다행이라고 생각한다. 그리고 혼자만 보는 블로그더라도, 글로 과정을 기록하고 생각했던 것들을 정리해두는 것은 확실히 업무에서도 도움이 되고 있다. 소통이나 진행상황 공유를 말로 하는 것보다 문서화해서 진행하는 것은 이전 직장에서도 강조되었던 내용들인데, 그나마 쉬는 기간에도 어느정도 기록하는 습관들 둬서 그런지 그런 부분에서는 수월하게 적응했다.  
+
+요즘 하는 일은 3D mesh를 생성하는 일을 하고 있는데, 요구 조건에 맞게 생성하고 잘 배치하는 작업들을 효율적으로 할 수 있게 자동화 하는 작업들을 하고 있고 3D 아티스트 분들과도 소통하며 협업하고 있다. 지금 하는일은 computer graphics 분야로 보면 geometry나 modeling에 가까운 부분이라고 생각이된다. 입사과정에서도 graphics engineer 포지션으로 지원하면서 내가 rendering이나 animation(simulation)쪽에 관심이 있음을 밝히기도 했고 맡게될 업무는 geometry나 정적인 model을 다루는 쪽일 수 있다고 상호 인지했던터라 불만이 있다거나 그런 상태는 아니다. 사실 나도 graphics engineer로의 커리어를 희망하면서도 막상은 graphics engineer라면 정확히 뭘 해야한다 거나 보통 어떤 업무를 맡는다는 등의 경험이나 판단 기준이 있지는 않으니, 일단은 이전보다 한단계 더 관심분야에 가까워진다는 측면에서는 이점이 있다고 판단하고 최종 결정을 한 것이기도 하다. 한가지 희망했던 건 graphics engineer의 senior 개발자가 있기를 희망했는데, 그 부분에서는 기대와 맞지 않는 부분도 있는 것 같다. 팀 domain에 해당하는 senior 분들이 팀에 계시고, 옆 팀이나 주변 팀에 graphics engineer분들이 계시는 걸로 파악하고 있어서 보고 배우자 한다면, 나 스스로 하기 나름일 것 같기도 하다.
+
+업무 방식 측면에서는, 다른 팀이나 다른 분야의 전문가와 협업하는 과정에서 가장 중요하다고 느낀 것은 역시 요구사항을, (specification을) 사전에 명확히 하는 것이다. 어떤 결과를 원하는지, 그 결과에 어떤 특성들이 있을 수록 좋은지, 그 특성을 정량화할 수 있는지, 그렇다면 어느 정도 수치를 만족해야하는지, 더 나아가서는 왜 그런 특성들이 필요하고 그 결과가 어디에 쓰이는지에 대한 context 파악까지 할수 있어야 서로 만족할만한 결과물을 얻는다는 점을 느끼고 있다. 지금까지는 업무를 시작할때 이런 specification을 가지지 못한 채로 시작하고 있어서 작업을 진행하면서 중간결과를 전달하고 오는 피드백을 통해서 정리중이다. 이후에는 내가 아니더라도 이런 업무를 맡는 다음 사람을 생각하며 초기 계획을 위해서는 이런 specification을 잘 남기고 서로 잘 소통할 수 있도록 염두해두고 일하고 있다. 분야 특성상 눈으로 결과를 봐야한다거나, QA가 필요하다거나 하는 특성이 있을 수 있는데, 적어도 내가 작업하기 편한 언어에서는 최대한 많은 특성들이 정량화되고 그 수치를 달성하는 것을 목적으로 작업하는게 편하다. 아마 대부분의 개발자는 그렇지 않을까.  
+
+세부적인 개발 측면에서 아직은 주로 python 코드를 쓰고 있는데, 다른 python의 open source 기반 패키지들은 대부분 openGL renderer에 기반을 두고 있는게 상당히 많다고 느꼈다. 그리고 대부분 C++로 개발된 라이브러리를 python으로 포팅된 바인딩들을 쓰는 경우가 많은데 그럴때 C++ 측에서 integration 작업이나 자료가 많아서 참고용으로 보고 있는 정도다. 이후에 C++ 이나 다른 언어를 사용할때에는 상용 게임엔진을 다루거나 할 때 정도로 예상중이다.   
+
+아직 몇달이 채 되지 않아서 이런 작업을 계속하게 될지 혹은 다른 업무를 맡을지는 모르겠는데, 지금까지 일의 형태는 이전 직장에서 하던 양상과 크게 다르지 않아 큰 어려움은 없다고 생각하고 있다.(타 도메인 전문가와 소통하며 어떤 결과물을 만들어내거나 요구사항에 맞춰서 어떤 프로세스를 자동화 한다거나 하는 큰 개념에서 유사하다.) 조금 다른점은 이전 직장에서는 하나의 프로젝트를 여러명에서 contributor로 같이 진행하면서 review하고 배포하는 느낌이었다면, 현 직장에서는 우리팀 모두가 각자 다른 일을 하고 있고 그래서인지 code를 서로 review하는 문화가 활발한 건 아닌 것 같다. (팀마다 확실히 분위기는 다르긴 한 것 같다). 물론 내가 아직 혼자서 이것저것 해볼 기회가 주어져서 reviewer나 reviewee로 할당될 일이 거의 없어서 그런 점도 있다.
+    
+이전 직장에서는 2d 위주의 기하 데이터를 중점으로 다뤘다면 요즘엔 2.5D 정도의 데이터를 다루고 있는 것 같다. 완전히 3D 라고 보기 어려운 부분은 다루는 데이터 도메인에 기반한 것도 있고, 내가 프로토타이핑 식으로 요즘 작업하면서 시도해보고 있는 방향에서 오는 것도 있다. 확실히 익숙한 기술이나 접근 방식이 구현비용이 적게 든다고 생각하게 돼서 인지, 먼저 떠올리고 테스트해보게 되는데, 이런 측면에서 익숙한 툴을 늘리는 것의 중요성도 느끼고 있다. graphics에서 rendering과 관련된 부분은 아직 거의 다루고 있지 않기도 한데, 뭔가 건드려볼 대상들은 확실히 많아 보이지만 내가 적은 비용으로 쉽게 접근해볼만한 익숙함이 부족해서 선뜻 파보지 않아서 그렇기도 하다고 생각한다. (예를 들자면 texture opmization 등의 주제). 관심만 있고 경험은 없는 채로 남기 싫다면 업무에서 시작을 하든, 퇴근 후 공부를 하든 뭐라도 계획을 세울 시점이다. 어느정도 기반 지식이 있어서 관련 업무를 맡는다면 일하면서 더 효율적으로 체득할 수 있을 거라 기대하고 있다.
+    
+그리고 상용 게임엔진 관련 사용도 어느정도 익혀두면 확실히 도움이 될것이라고 예전보다 더 강하게 느끼고 있는데, 아직 계획적인 학습 방향을 설정하지는 않고 가끔씩 궁금한 내용 한두개씩 찾아보는 정도이다. (어떤 작업을 시작하고 싶다거나, 내가 작업 의사를 표출하려면 할 줄 아는 것만 깊게 파는 것 보다는 여러가지를 건드려보는게 기회가 많이 생길 것 같다.) 관련해서 스타트업 개발자로서 더 강력하게 느끼는 점은, 내가 하고싶다거나 필요하다고 제시하는 업무를 직접 계획해서 시작해볼 수 있는 자율성과 기회가 주어진다는 점이다. top-down으로 정해진 업무나 필요한 기능을 만드는 건 당연히 해야하는 거고, 더 능동적으로 내가 제안하고 필요성을 제기해야한다고 생각하고 있다. (이전 직장에서 내가 부족했다고 생각하는 부분이기도 하다.) 그게 현재 일하는 직장에서의 장점이라고 생각하고, 어떻게 보면 이런 기회를 잘 스스로 챙기지 못하고 수동적인 태도로 일을하게 되면 큰 단점이 될 것으로 보고 있다. 
